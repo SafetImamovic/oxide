@@ -1,0 +1,12 @@
+[package]
+name = "oxide"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.98"
+winit = { version = "0.30.12", features = ["android-native-activity"] }
+env_logger = "0.11.8"
+log = "0.4.27"
+wgpu = "26.0.1"
+pollster = "0.4.0"
