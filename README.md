@@ -62,12 +62,12 @@ This generates the `pkg/` folder containing the `.wasm` and JS bindings.
 
 To bypass CORS restrictions when testing in the browser:
 
-From `/static`:
+From root:
 ```bash
 $ python -m http.server 8080
 ```
 
-Open [http://localhost:8080](http://localhost:8080) in your browser.
+Open [http://localhost:8080/static/](http://localhost:8080/static/) in your browser.
 
 ---
 

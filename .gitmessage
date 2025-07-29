@@ -1,0 +1,29 @@
+<type>(<scope>): <short summary>
+
+[optional detailed description of the change.
+Explain what and why, not how. Wrap text at 72 characters.]
+
+[optional footer(s)]
+- BREAKING CHANGE: describe breaking change here
+- Closes #<issue_number>
+
+# -------------------------
+# Commit Types:
+# feat:     A new feature
+# fix:      A bug fix
+# docs:     Documentation only changes
+# style:    Code style changes (formatting, missing semicolons, etc.)
+# refactor: Code restructuring without changing behavior
+# perf:     Performance improvements
+# test:     Adding or updating tests
+# chore:    Maintenance tasks (build, tooling, CI)
+# build:    Changes that affect the build system or dependencies
+# ci:       Changes to CI configuration or scripts
+# revert:   Reverts a previous commit
+#
+# Scope Examples (optional):
+# windowing, wasm, renderer, input, state, logging, docs
+#
+# Example:
+# feat(windowing): add initial winit setup
+
