@@ -33,21 +33,126 @@ use wasm_bindgen::prelude::*;
 
 /// Represents the rendering state of the application.
 ///
-/// This struct holds references to rendering resources and
-/// manages per-frame updates and resizing behavior.
+/// This struct holds references to key rendering resources and manages
+/// per-frame updates, including window resizing and surface configuration.
 ///
-/// # Fields
-/// - `window`: A thread-safe Atomic Reference to the application window, via `std::sync::Arc`.
+/// It encapsulates the lifecycle of the WebGPU rendering context,
+/// coordinating the surface, device, queue, and configuration.
+///
+/// # Rendering Flow Overview
+///
+/// The rendering pipeline roughly follows this flow:
+///
+/// ```text
+/// +--------------------+
+/// |     Application    |
+/// |     (your code)    |
+/// +---------+----------+
+///           |
+///           v
+/// +--------------------+   create
+/// |      Surface       |<----------+
+/// |  (Canvas Context)  |           |
+/// +---------+----------+           |
+///           |                      |
+///           |  configure           |
+///           v                      |
+/// +--------------------+           |
+/// |   SurfaceConfig    |           |
+/// +---------+----------+           |
+///           |                      |
+///           |                      |
+///           v                      |
+/// +--------------------+   create  |
+/// |      Device        |>----------+
+/// |   (GPU Interface)  |
+/// +---------+----------+
+///           |
+///           | submit commands
+///           v
+/// +--------------------+
+/// |       Queue        |
+/// |  (Command Buffer)  |
+/// +---------+----------+
+///           |
+///           v
+/// +--------------------+
+/// |        GPU         |
+/// | (Render & Compute) |
+/// +---------+----------+
+///           |
+///           v
+/// +---------+----------+
+/// |    Framebuffer /   |
+/// |    Canvas Output   |
+/// +--------------------+
+/// ```
 ///
 /// # Example
 ///
-/// ```no_run
-/// let window = Arc::new(Window::new().unwrap());
-/// let state = State::new(window).await.unwrap();
+/// ```
+/// use std::sync::Arc;
+///
+/// async fn create_state_example() -> anyhow::Result<()> {
+///     let window = Arc::new(Window::new().unwrap());
+///     let state = State::new(window).await?;
+///     Ok(())
+/// }
+///
+/// let x = 1;
+/// let y = 2;
+///
+/// assert_eq!(3, x + y);
 /// ```
 pub struct State
 {
-        window: Arc<Window>,
+        /// A thread-safe reference to the window.
+        pub window: Arc<Window>,
+
+        /// Handle to a presentable surface.
+        ///
+        /// This type is unique to the Rust API of wgpu. In the WebGPU specification,
+        /// `GPUCanvasContext` serves a similar role.
+        ///
+        /// A `GPUCanvasContext` object is created via the `getContext()` method of an
+        /// `HTMLCanvasElement` instance by passing the string literal `'webgpu'` as its
+        /// contextType argument.
+        ///
+        /// Example (WebGPU Spec in JavaScript):
+        /// ```no_run
+        /// const canvas = document.createElement('canvas');
+        /// const context = canvas.getContext('webgpu');
+        /// ```
+        ///
+        /// Reference: <https://www.w3.org/TR/webgpu/#canvas-rendering>
+        pub surface: wgpu::Surface<'static>,
+
+        /// Open connection to a graphics and/or compute device.
+        ///
+        /// A `GPUDevice` encapsulates a device and exposes its functionality.
+        /// It is the top-level interface through which WebGPU interfaces are created.
+        ///
+        /// Reference: <https://gpuweb.github.io/gpuweb/#gpu-device>
+        pub device: wgpu::Device,
+
+        /// Handle to a command queue on a device.
+        ///
+        /// Used to submit commands for execution.
+        ///
+        /// Reference: <https://gpuweb.github.io/gpuweb/#gpu-queue>
+        pub queue: wgpu::Queue,
+
+        /// Describes a Surface configuration.
+        ///
+        /// Contains surface format, usage flags, width, height, and present mode.
+        ///
+        /// Reference: <https://gpuweb.github.io/gpuweb/#canvas-configuration>
+        pub config: wgpu::SurfaceConfiguration,
+
+        /// Tracks if the surface has been configured yet.
+        ///
+        /// Rendering commands require a configured surface.
+        pub is_surface_configured: bool,
 }
 
 impl State
@@ -56,9 +161,29 @@ impl State
         ///
         /// Initializes rendering resources and prepares the engine
         /// for drawing.
-        pub async fn new(window: Arc<Window>) -> anyhow::Result<Self>
+        async fn new(window: Arc<Window>) -> anyhow::Result<State>
         {
-                Ok(Self { window })
+                let size = window.inner_size();
+
+                // The instance is a handle to our GPU
+                // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
+                let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        backends: wgpu::Backends::PRIMARY,
+                        #[cfg(target_arch = "wasm32")]
+                        backends: wgpu::Backends::GL,
+                        ..Default::default()
+                });
+
+                let surface = instance.create_surface(window.clone()).unwrap();
+
+                let adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                        power_preference: wgpu::PowerPreference::default(),
+                        compatible_surface: Some(&surface),
+                        force_fallback_adapter: false,
+                    })
+                .await?;
         }
 
         /// Handles window resize events.
