@@ -1,11 +1,11 @@
 <type>(<scope>): <short summary>
 
-[optional detailed description of the change.
-Explain what and why, not how. Wrap text at 72 characters.]
+# [optional detailed description of the change.
+# Explain what and why, not how. Wrap text at 72 characters.]
 
-[optional footer(s)]
-- BREAKING CHANGE: describe breaking change here
-- Closes #<issue_number>
+# [optional footer(s)]
+# - BREAKING CHANGE: describe breaking change here
+# - Closes #<issue_number>
 
 # -------------------------
 # Commit Types:
