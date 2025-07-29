@@ -1,4 +1,4 @@
 fn main()
 {
-        println!("Nice!");
+        oxide::run().unwrap();
 }
