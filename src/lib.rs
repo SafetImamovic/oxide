@@ -217,13 +217,26 @@ impl State
                                                      // RENDER_ATTACHMET is guaranteed to be supported.
                                                      usage:
                                                              wgpu::TextureUsages::RENDER_ATTACHMENT,
+
                                                      format: surface_format,
+
                                                      width: size.width,
+
                                                      height: size.height,
-                                                     // IMMEDIATE: No VSync.
+
+                                                     #[cfg(target_arch = "wasm32")]
+                                                     present_mode: surface_caps.present_modes[0],
+
+                                                     // IMMEDIATE: No VSync for non wasm
+                                                     // environments, because wasm only has 1
+                                                     // present mode.
+                                                     #[cfg(not(target_arch = "wasm32"))]
                                                      present_mode: surface_caps.present_modes[3],
+
                                                      alpha_mode: surface_caps.alpha_modes[0],
+
                                                      view_formats: vec![],
+
                                                      desired_maximum_frame_latency: 2 };
 
                 Ok(State { window,
@@ -257,12 +270,35 @@ impl State
                                                                 ..Default::default() })
         }
 
+        fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool)
+        {
+                log::info!("{:#?}", code);
+
+                if let (KeyCode::Escape, true) = (code, is_pressed)
+                {
+                        log::info!("Oxide Render Engine Exiting. bye!");
+
+                        event_loop.exit()
+                }
+        }
+
         /// Handles window resize events.
         ///
         /// # Parameters
         /// - `width`: New window width in pixels
         /// - `height`: New window height in pixels
-        pub fn resize(&mut self, _width: u32, _height: u32) {}
+        pub fn resize(&mut self, width: u32, height: u32)
+        {
+                if width == 0 || height == 0
+                {
+                        return;
+                }
+
+                self.config.width = width;
+                self.config.height = height;
+                self.surface.configure(&self.device, &self.config);
+                self.is_surface_configured = true;
+        }
 
         /// Requests a redraw for the next frame.
         ///
@@ -366,7 +402,9 @@ impl ApplicationHandler<State> for App
         ///
         /// On WASM, async initialization sends the completed [`State`] via a proxy,
         /// which is received here and stored.
-        fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: State)
+        fn user_event(&mut self,
+                      _event_loop: &ActiveEventLoop,
+                      /* Needs to be mut for wasm */ mut event: State)
         {
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -395,27 +433,14 @@ impl ApplicationHandler<State> for App
                         None => return,
                 };
 
-                match event
+                if let WindowEvent::KeyboardInput { event:
+                                                            KeyEvent { physical_key:
+                                                                               PhysicalKey::Code(code),
+                                                                       state: key_state,
+                                                                       .. },
+                                                    .. } = event
                 {
-                        WindowEvent::CloseRequested => event_loop.exit(),
-                        WindowEvent::Resized(size) => state.resize(size.width, size.height),
-                        WindowEvent::RedrawRequested => state.render(),
-                        WindowEvent::KeyboardInput { event:
-                                                             KeyEvent { physical_key:
-                                                                                PhysicalKey::Code(code),
-                                                                        state,
-                                                                        .. },
-                                                     .. } =>
-                        {
-                                log::info!("Key pressed: {:?}", code);
-
-                                if let (KeyCode::Escape, true) = (code, state.is_pressed())
-                                {
-                                        event_loop.exit()
-                                }
-                        }
-                        _ =>
-                        {}
+                        state.handle_key(event_loop, code, key_state.is_pressed())
                 }
         }
 }
