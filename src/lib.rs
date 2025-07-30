@@ -31,6 +31,12 @@ use winit::{
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
+const DEFAULT_CANVAS_WIDTH: u32 = 300;
+
+#[cfg(target_arch = "wasm32")]
+const DEFAULT_CANVAS_HEIGHT: u32 = 150;
+
 /// Represents the rendering state of the application.
 ///
 /// This struct holds references to key rendering resources and manages
@@ -294,8 +300,29 @@ impl State
                         return;
                 }
 
-                self.config.width = width;
-                self.config.height = height;
+                // Clamping to max dim to prevent panic!
+                let max_dim = self.device.limits().max_texture_dimension_2d;
+                let final_width = width.min(max_dim);
+                let final_height = height.min(max_dim);
+
+                log::info!("Resizing surface -> width: {}, height: {}",
+                           final_width,
+                           final_height);
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                        self.config.width = final_width;
+                        self.config.height = final_height;
+                }
+
+                // Constant dimensions for `wasm`, let the browser
+                // scale handle the dom element dimensions.
+                #[cfg(target_arch = "wasm32")]
+                {
+                        self.config.width = DEFAULT_CANVAS_WIDTH;
+                        self.config.height = DEFAULT_CANVAS_HEIGHT;
+                }
+
                 self.surface.configure(&self.device, &self.config);
                 self.is_surface_configured = true;
         }
@@ -304,9 +331,52 @@ impl State
         ///
         /// This method triggers a `RedrawRequested` event on the window,
         /// allowing the render loop to run again.
-        pub fn render(&mut self)
+        pub fn render(&mut self) -> Result<(), wgpu::SurfaceError>
         {
                 self.window.request_redraw();
+
+                if !self.is_surface_configured
+                {
+                        return Ok(());
+                }
+
+                let output = self.surface.get_current_texture()?;
+
+                let view = output.texture
+                                 .create_view(&wgpu::TextureViewDescriptor::default());
+                let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder!"),
+            });
+
+                {
+                        let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("Render Pass"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                depth_slice: None,
+                                view: &view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                                                r: 0.1,
+                                                g: 0.2,
+                                                b: 0.3,
+                                                a: 1.0,
+                                        }),
+
+                                store: wgpu::StoreOp::Store,
+                                },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                        });
+                }
+
+                // submit will accept anything that implements IntoIter
+                self.queue.submit(std::iter::once(encoder.finish()));
+                output.present();
+
+                Ok(())
         }
 }
 
@@ -409,8 +479,6 @@ impl ApplicationHandler<State> for App
                 #[cfg(target_arch = "wasm32")]
                 {
                         event.window.request_redraw();
-                        event.resize(event.window.inner_size().width,
-                                     event.window.inner_size().height);
                 }
                 self.state = Some(event);
         }
@@ -433,14 +501,50 @@ impl ApplicationHandler<State> for App
                         None => return,
                 };
 
-                if let WindowEvent::KeyboardInput { event:
-                                                            KeyEvent { physical_key:
-                                                                               PhysicalKey::Code(code),
-                                                                       state: key_state,
-                                                                       .. },
-                                                    .. } = event
+                match event
                 {
-                        state.handle_key(event_loop, code, key_state.is_pressed())
+                        WindowEvent::CloseRequested => event_loop.exit(),
+                        WindowEvent::Resized(size) => state.resize(size.width, size.height),
+                        WindowEvent::RedrawRequested =>
+                        {
+                                match state.render()
+                                {
+                                        Ok(_) =>
+                                        {}
+                                        // Reconfigure the surface if it's lost or outdated
+                                        Err(wgpu::SurfaceError::Lost
+                                            | wgpu::SurfaceError::Outdated) =>
+                                        {
+                                                let size = state.window.inner_size();
+                                                state.resize(size.width, size.height);
+                                        }
+                                        Err(e) =>
+                                        {
+                                                log::error!("Unable to render {}", e);
+                                        }
+                                }
+                        }
+                        WindowEvent::MouseInput { state, button, .. } => match (button,
+                                                                                state.is_pressed())
+                        {
+                                (MouseButton::Left, true) =>
+                                {}
+                                (MouseButton::Left, false) =>
+                                {}
+                                _ =>
+                                {}
+                        },
+                        WindowEvent::KeyboardInput { event:
+                                                             KeyEvent { physical_key:
+                                                                                PhysicalKey::Code(code),
+                                                                        state: key_state,
+                                                                        .. },
+                                                     .. } =>
+                        {
+                                state.handle_key(event_loop, code, key_state.is_pressed())
+                        }
+                        _ =>
+                        {}
                 }
         }
 }
@@ -460,8 +564,10 @@ pub fn run() -> anyhow::Result<()>
         console_log::init_with_level(log::Level::Info).unwrap_throw();
 
         let event_loop = EventLoop::with_user_event().build()?;
+
         let mut app = App::new(#[cfg(target_arch = "wasm32")]
                                &event_loop);
+
         event_loop.run_app(&mut app)?;
         Ok(())
 }
