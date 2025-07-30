@@ -1,5 +1,5 @@
-mod app;
-mod state;
+pub mod app;
+pub mod state;
 
 /// WebAssembly (WASM) architecture note:
 ///
