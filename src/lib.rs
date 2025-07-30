@@ -87,42 +87,17 @@ use wasm_bindgen::prelude::*;
 /// |    Canvas Output   |
 /// +--------------------+
 /// ```
-///
-/// # Example
-///
-/// ```
-/// use std::sync::Arc;
-///
-/// async fn create_state_example() -> anyhow::Result<()> {
-///     let window = Arc::new(Window::new().unwrap());
-///     let state = State::new(window).await?;
-///     Ok(())
-/// }
-///
-/// let x = 1;
-/// let y = 2;
-///
-/// assert_eq!(3, x + y);
-/// ```
 pub struct State
 {
         /// A thread-safe reference to the window.
+        ///
+        /// We want to store the window in a shared State and pass clones around without worrying about ownership.
         pub window: Arc<Window>,
 
         /// Handle to a presentable surface.
         ///
         /// This type is unique to the Rust API of wgpu. In the WebGPU specification,
         /// `GPUCanvasContext` serves a similar role.
-        ///
-        /// A `GPUCanvasContext` object is created via the `getContext()` method of an
-        /// `HTMLCanvasElement` instance by passing the string literal `'webgpu'` as its
-        /// contextType argument.
-        ///
-        /// Example (WebGPU Spec in JavaScript):
-        /// ```no_run
-        /// const canvas = document.createElement('canvas');
-        /// const context = canvas.getContext('webgpu');
-        /// ```
         ///
         /// Reference: <https://www.w3.org/TR/webgpu/#canvas-rendering>
         pub surface: wgpu::Surface<'static>,
@@ -165,25 +140,121 @@ impl State
         {
                 let size = window.inner_size();
 
-                // The instance is a handle to our GPU
-                // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
-                let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-                        #[cfg(not(target_arch = "wasm32"))]
-                        backends: wgpu::Backends::PRIMARY,
-                        #[cfg(target_arch = "wasm32")]
-                        backends: wgpu::Backends::GL,
-                        ..Default::default()
-                });
+                let instance = Self::new_instance();
 
-                let surface = instance.create_surface(window.clone()).unwrap();
+                let surface = instance.create_surface(window.clone())?;
 
                 let adapter = instance
-                .request_adapter(&wgpu::RequestAdapterOptions {
-                        power_preference: wgpu::PowerPreference::default(),
-                        compatible_surface: Some(&surface),
-                        force_fallback_adapter: false,
+                    .request_adapter(&wgpu::RequestAdapterOptions {
+                            // Either `HighPerformance` or `LowPower`.
+                            //
+                            // 1. LowPower will pick an adapter that favors battery life.
+                            //
+                            // 2. HighPerformance will pick an adapter for more power-hungry
+                            //    yet more performant GPU's, such as a dedicated graphics card.
+                            power_preference: wgpu::PowerPreference::HighPerformance,
+
+                            // Tells wgpu to find an adapter that can present to the supplied surface.
+                            compatible_surface: Some(&surface),
+
+                            // Forces wgpu to pick an adapter that will work on all hardware.
+                            // Generally a software implementation on most systems.
+                            force_fallback_adapter: false,
                     })
-                .await?;
+                    .await?;
+
+                // Requests a connection to a physical device, creating a logical device.
+                //
+                // Returns the Device together with a Queue that executes command buffers.
+                let (device, queue) = adapter
+                    .request_device(&wgpu::DeviceDescriptor {
+                            label: None,
+                            required_features: wgpu::Features::empty(),
+                            // WebGL doesn't support all of wgpu's features, so if
+                            // we're building for the web we'll have to disable some.
+                            // Describes the limit of certain types of resources that we can create.
+                            //
+                            // Reference <https://gpuweb.github.io/gpuweb/#gpusupportedlimits>
+                            required_limits: if cfg!(target_arch = "wasm32") {
+                                    wgpu::Limits::downlevel_webgl2_defaults()
+                            } else {
+                                    wgpu::Limits::default()
+                            },
+
+                            // Provides the adapter with a preferred memory allocation strategy.
+                            memory_hints: Default::default(),
+
+                            // Debug tracing.
+                            trace: wgpu::Trace::Off,
+                    })
+                    .await?;
+
+                // Logs the adapter features.
+                //
+                // Corresponds to these WebGPU feature Reference
+                // <https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename>
+                adapter.features()
+                       .iter()
+                       .for_each(|f| log::info!("FEATURE: {}", f));
+
+                let surface_caps = surface.get_capabilities(&adapter);
+
+                // Represents different Display-Surface sync modes.
+                //
+                // For example, FiFo is essentially VSync.
+                surface_caps.present_modes
+                            .iter()
+                            .for_each(|f| log::info!("{:#?}", f));
+
+                let surface_format = surface_caps.formats
+                                                 .iter()
+                                                 .find(|f| f.is_srgb())
+                                                 .copied()
+                                                 .unwrap_or(surface_caps.formats[0]);
+
+                let config =
+                        wgpu::SurfaceConfiguration { // Describes how SurfaceTextures will be used.
+                                                     // RENDER_ATTACHMET is guaranteed to be supported.
+                                                     usage:
+                                                             wgpu::TextureUsages::RENDER_ATTACHMENT,
+                                                     format: surface_format,
+                                                     width: size.width,
+                                                     height: size.height,
+                                                     // IMMEDIATE: No VSync.
+                                                     present_mode: surface_caps.present_modes[3],
+                                                     alpha_mode: surface_caps.alpha_modes[0],
+                                                     view_formats: vec![],
+                                                     desired_maximum_frame_latency: 2 };
+
+                Ok(State { window,
+                           surface,
+                           device,
+                           queue,
+                           config,
+                           is_surface_configured: false })
+        }
+
+        /// Instance of wgpu.
+        ///
+        /// Generates a [`wgpu::Instance`] which is a handle to our GPU.
+        ///
+        /// GPU ([`wgpu::Instance`]) is the entry point to `WebGPU`.
+        /// Reference <https://gpuweb.github.io/gpuweb/#gpu-interface>
+        ///
+        /// Defined via [`wgpu::InstanceDecsriptor`], this represents Options for creating an instance.
+        /// Reference <https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html>
+        ///
+        /// ```text
+        /// BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU.
+        /// ```
+        fn new_instance() -> wgpu::Instance
+        {
+                wgpu::Instance::new(&wgpu::InstanceDescriptor { #[cfg(not(target_arch = "wasm32"))]
+                                                                backends:
+                                                                        wgpu::Backends::PRIMARY,
+                                                                #[cfg(target_arch = "wasm32")]
+                                                                backends: wgpu::Backends::GL,
+                                                                ..Default::default() })
         }
 
         /// Handles window resize events.
@@ -209,6 +280,7 @@ impl State
 /// - Managing the application state
 /// - Handling platform-specific event loops
 /// - Dispatching window and user events
+#[derive(Default)]
 pub struct App
 {
         /// On browser environments, an [`EventLoopProxy`] is needed
@@ -294,7 +366,7 @@ impl ApplicationHandler<State> for App
         ///
         /// On WASM, async initialization sends the completed [`State`] via a proxy,
         /// which is received here and stored.
-        fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State)
+        fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: State)
         {
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -354,12 +426,6 @@ impl ApplicationHandler<State> for App
 /// - `Ok(())` if the application exits successfully.
 /// - An error if initialization fails.
 ///
-/// # Example
-/// ```no_run
-/// fn main() -> anyhow::Result<()> {
-///     run()
-/// }
-/// ```
 pub fn run() -> anyhow::Result<()>
 {
         #[cfg(not(target_arch = "wasm32"))]
