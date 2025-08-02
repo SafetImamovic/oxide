@@ -27,10 +27,10 @@ pub struct App
         /// On browser environments, an [`EventLoopProxy`] is needed
         /// to send events back into the event loop asynchronously.
         #[cfg(target_arch = "wasm32")]
-        proxy: Option<winit::event_loop::EventLoopProxy<State>>,
+        pub proxy: Option<winit::event_loop::EventLoopProxy<State>>,
 
         /// The rendering state of the application.
-        state: Option<State>,
+        pub state: Option<State>,
 }
 
 impl App
