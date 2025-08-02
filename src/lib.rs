@@ -1,4 +1,7 @@
+#![feature(default_field_values)]
+
 pub mod app;
+pub mod config;
 pub mod state;
 
 /// WebAssembly (WASM) architecture note:
@@ -27,12 +30,6 @@ use wasm_bindgen::prelude::*;
 use winit::event_loop::EventLoop;
 
 use crate::app::App;
-
-#[cfg(target_arch = "wasm32")]
-const DEFAULT_CANVAS_WIDTH: u32 = 800;
-
-#[cfg(target_arch = "wasm32")]
-const DEFAULT_CANVAS_HEIGHT: u32 = 600;
 
 /// Starts the application in native or WASM environments.
 ///
