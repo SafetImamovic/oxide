@@ -8,13 +8,13 @@ pub struct Config
         pub default_canvas_height: u32,
 }
 
-impl Config
+
+impl Default for Config
 {
-        pub fn new() -> Self
+        fn default() -> Self
         {
                 Self { #[cfg(target_arch = "wasm32")]
                        default_canvas_width: 1280,
-
                        #[cfg(target_arch = "wasm32")]
                        default_canvas_height: 720 }
         }
