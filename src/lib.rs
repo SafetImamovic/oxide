@@ -2,6 +2,8 @@ pub mod app;
 pub mod config;
 pub mod state;
 
+use std::process;
+
 /// WebAssembly (WASM) architecture note:
 ///
 /// We explicitly target `wasm32` instead of `wasm64` because:
@@ -45,7 +47,10 @@ pub fn run() -> anyhow::Result<()>
 
         let event_loop = EventLoop::with_user_event().build()?;
 
-        let config = Config::default();
+        let config = Config::from_file().unwrap_or_else(|err| {
+                                                log::info!("ERRAH! {err}");
+                                                Config::default()
+                                        });
 
         let mut app = App::new(config,
                                #[cfg(target_arch = "wasm32")]
