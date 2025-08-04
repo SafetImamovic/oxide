@@ -13,7 +13,7 @@ use winit::{
         window::Window,
 };
 
-use crate::state::State;
+use crate::{config::Config, state::State};
 
 /// Main application struct.
 ///
@@ -21,7 +21,6 @@ use crate::state::State;
 /// - Managing the application state
 /// - Handling platform-specific event loops
 /// - Dispatching window and user events
-#[derive(Default)]
 pub struct App
 {
         /// On browser environments, an [`EventLoopProxy`] is needed
@@ -31,6 +30,9 @@ pub struct App
 
         /// The rendering state of the application.
         pub state: Option<State>,
+
+        /// Configuration options for the `App`.
+        pub config: Config,
 }
 
 impl App
@@ -40,14 +42,38 @@ impl App
         /// # Platform differences
         /// - On native builds, the event loop is created without a proxy.
         /// - On `wasm32`, a proxy is created to allow async initialization.
-        pub fn new(#[cfg(target_arch = "wasm32")] event_loop: &EventLoop<State>) -> Self
+        pub fn new(config: Config,
+                   #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<State>)
+                   -> Self
         {
                 #[cfg(target_arch = "wasm32")]
                 let proxy = Some(event_loop.create_proxy());
 
                 Self { state: None,
+                       config,
                        #[cfg(target_arch = "wasm32")]
                        proxy }
+        }
+
+        fn resize(&mut self)
+        {
+                let state = match &mut self.state
+                {
+                        Some(canvas) => canvas,
+                        None => return,
+                };
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                        state.resize(self.config.default_canvas_width,
+                                     self.config.default_canvas_height);
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                        let size = state.window.inner_size();
+                        state.resize(size.width, size.height);
+                }
         }
 }
 
@@ -107,9 +133,7 @@ impl ApplicationHandler<State> for App
         ///
         /// On WASM, async initialization sends the completed [`State`] via a proxy,
         /// which is received here and stored.
-        fn user_event(&mut self,
-                      _event_loop: &ActiveEventLoop,
-                      event: State)
+        fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: State)
         {
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -140,7 +164,7 @@ impl ApplicationHandler<State> for App
                 match event
                 {
                         WindowEvent::CloseRequested => event_loop.exit(),
-                        WindowEvent::Resized(size) => state.resize(size.width, size.height),
+                        WindowEvent::Resized(_size) => self.resize(),
                         WindowEvent::RedrawRequested =>
                         {
                                 match state.render()
@@ -151,8 +175,7 @@ impl ApplicationHandler<State> for App
                                         Err(wgpu::SurfaceError::Lost
                                             | wgpu::SurfaceError::Outdated) =>
                                         {
-                                                let size = state.window.inner_size();
-                                                state.resize(size.width, size.height);
+                                                self.resize();
                                         }
                                         Err(e) =>
                                         {

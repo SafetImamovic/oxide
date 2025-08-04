@@ -4,12 +4,6 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
-#[cfg(target_arch = "wasm32")]
-use crate::DEFAULT_CANVAS_HEIGHT;
-
-#[cfg(target_arch = "wasm32")]
-use crate::DEFAULT_CANVAS_WIDTH;
-
 /// Represents the rendering state of the application.
 ///
 /// This struct holds references to key rendering resources and manages
@@ -342,19 +336,8 @@ impl State
                            final_width,
                            final_height);
 
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                        self.config.width = final_width;
-                        self.config.height = final_height;
-                }
-
-                // Constant dimensions for `wasm`, let the browser
-                // scale handle the dom element dimensions.
-                #[cfg(target_arch = "wasm32")]
-                {
-                        self.config.width = DEFAULT_CANVAS_WIDTH;
-                        self.config.height = DEFAULT_CANVAS_HEIGHT;
-                }
+                self.config.width = final_width;
+                self.config.height = final_height;
 
                 self.surface.configure(&self.device, &self.config);
                 self.is_surface_configured = true;

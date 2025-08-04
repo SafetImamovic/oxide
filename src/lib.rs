@@ -1,5 +1,3 @@
-#![feature(default_field_values)]
-
 pub mod app;
 pub mod config;
 pub mod state;
@@ -27,9 +25,9 @@ pub mod state;
 /// binaries clean and free of unnecessary dependencies.
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-use winit::event_loop::EventLoop;
 
-use crate::app::App;
+use crate::{app::App, config::Config};
+use winit::event_loop::EventLoop;
 
 /// Starts the application in native or WASM environments.
 ///
@@ -47,10 +45,14 @@ pub fn run() -> anyhow::Result<()>
 
         let event_loop = EventLoop::with_user_event().build()?;
 
-        let mut app = App::new(#[cfg(target_arch = "wasm32")]
+        let config = Config::new();
+
+        let mut app = App::new(config,
+                               #[cfg(target_arch = "wasm32")]
                                &event_loop);
 
         event_loop.run_app(&mut app)?;
+
         Ok(())
 }
 
