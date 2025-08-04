@@ -1,5 +1,8 @@
 pub mod app;
+pub mod config;
 pub mod state;
+
+use std::process;
 
 /// WebAssembly (WASM) architecture note:
 ///
@@ -24,15 +27,9 @@ pub mod state;
 /// binaries clean and free of unnecessary dependencies.
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+
+use crate::{app::App, config::Config};
 use winit::event_loop::EventLoop;
-
-use crate::app::App;
-
-#[cfg(target_arch = "wasm32")]
-const DEFAULT_CANVAS_WIDTH: u32 = 800;
-
-#[cfg(target_arch = "wasm32")]
-const DEFAULT_CANVAS_HEIGHT: u32 = 600;
 
 /// Starts the application in native or WASM environments.
 ///
@@ -50,10 +47,17 @@ pub fn run() -> anyhow::Result<()>
 
         let event_loop = EventLoop::with_user_event().build()?;
 
-        let mut app = App::new(#[cfg(target_arch = "wasm32")]
+        let config = Config::from_file().unwrap_or_else(|err| {
+                                                log::info!("ERRAH! {err}");
+                                                Config::default()
+                                        });
+
+        let mut app = App::new(config,
+                               #[cfg(target_arch = "wasm32")]
                                &event_loop);
 
         event_loop.run_app(&mut app)?;
+
         Ok(())
 }
 

@@ -12,6 +12,8 @@ name = "oxide_bin"
 path = "src/main.rs"
 
 [dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+toml = { version = "0.9.4", features = ["serde"] }
 anyhow = "1.0.98"
 winit = { version = "0.30.12", features = ["android-native-activity"] }
 env_logger = "0.11.8"
