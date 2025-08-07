@@ -1,8 +1,10 @@
-use std::iter;
+use egui_wgpu::ScreenDescriptor;
 use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
+
+use crate::gui::GuiRenderer;
 
 /// Represents the rendering state of the application.
 ///
@@ -106,6 +108,8 @@ pub struct State
         ///
         /// Rendering commands require a configured surface.
         pub is_surface_configured: bool,
+
+        pub gui: GuiRenderer,
 }
 
 impl State
@@ -271,7 +275,10 @@ impl State
                                 cache: None, // 6.
                         });
 
+                let gui = GuiRenderer::new(&device, &config.format, 1, &window)?;
+
                 Ok(State { window,
+                           gui,
                            render_pipeline,
                            surface,
                            device,
@@ -349,9 +356,9 @@ impl State
         /// allowing the render loop to run again.
         pub fn render(&mut self) -> Result<(), wgpu::SurfaceError>
         {
+                // Request redraw first
                 self.window.request_redraw();
 
-                // We can't render unless the surface is configured
                 if !self.is_surface_configured
                 {
                         return Ok(());
@@ -361,39 +368,61 @@ impl State
                 let view = output.texture
                                  .create_view(&wgpu::TextureViewDescriptor::default());
 
-                let mut encoder = self
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("Render Encoder"),
-                });
+                // Get window size for proper scaling
+                let window_size = self.window.inner_size();
+                let scale_factor = self.window.scale_factor();
 
+                let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("Main Render Encoder"),
+    });
+
+                // 1. First render your background
                 {
                         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("Render Pass"),
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                        view: &view,
-                                        resolve_target: None,
-                                        ops: wgpu::Operations {
-                                                load: wgpu::LoadOp::Clear(wgpu::Color {
-                                                        r: 0.1,
-                                                        g: 0.2,
-                                                        b: 0.3,
-                                                        a: 1.0,
-                                                }),
-                                                store: wgpu::StoreOp::Store,
-                                        },
-                                        depth_slice: None,
-                                })],
-                                depth_stencil_attachment: None,
-                                occlusion_query_set: None,
-                                timestamp_writes: None,
-                        });
-
+            label: Some("Background Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.1, g: 0.2, b: 0.3, a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
                         render_pass.set_pipeline(&self.render_pipeline);
                         render_pass.draw(0..3, 0..1);
                 }
 
-                self.queue.submit(iter::once(encoder.finish()));
+                // 2. Then render the GUI
+                self.gui.draw(
+                              &self.device,
+                              &self.queue,
+                              &mut encoder,
+                              &self.window,
+                              &view,
+                              ScreenDescriptor {
+            size_in_pixels: [window_size.width, window_size.height],
+            pixels_per_point: scale_factor as f32, // Use actual scale factor
+        },
+                              &mut |ui| {
+                                      egui::Window::new("Settings").resizable(true)
+                                                                   .vscroll(true)
+                                                                   .default_open(true) // Changed to true for testing
+                                                                   .show(ui, |ui| {
+                                                                           ui.label("Window!");
+                                                                           ui.label("Window!");
+                                                                           ui.label("Window!");
+                                                                           ui.label("Window!");
+                                                                   });
+                              },
+                );
+
+                self.queue.submit(std::iter::once(encoder.finish()));
                 output.present();
 
                 Ok(())
