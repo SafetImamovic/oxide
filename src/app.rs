@@ -161,6 +161,8 @@ impl ApplicationHandler<State> for App
                         None => return,
                 };
 
+                state.gui.handle_input(&state.window, &event);
+
                 match event
                 {
                         WindowEvent::CloseRequested => event_loop.exit(),
