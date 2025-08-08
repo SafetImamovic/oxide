@@ -1,11 +1,8 @@
-use egui::Label;
 use egui_wgpu::ScreenDescriptor;
 use std::sync::Arc;
-use wgpu::{SurfaceError, TextureFormat};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
-
 use crate::gui::GuiRenderer;
 
 /// Represents the rendering state of the application.
@@ -280,7 +277,7 @@ impl State
                                 cache: None, // 6.
                         });
 
-                let gui = GuiRenderer::new(&device, config.format, None, 1, &window);
+                let gui = GuiRenderer::new(&device, config.format, None, 1.0, 1, &window);
 
                 Ok(State { window,
                            some_val: 0.0,
@@ -391,32 +388,28 @@ impl State
                 let view = output.texture
                                  .create_view(&wgpu::TextureViewDescriptor::default());
 
-                // Get window size for proper scaling
-                let window_size = self.window.inner_size();
-                let scale_factor = self.window.scale_factor();
-
                 let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("Main Render Encoder"),
-    });
+                        label: Some("Main Render Encoder"),
+                });
 
                 // 1. First render your background
                 {
                         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Background Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1, g: 0.2, b: 0.3, a: 1.0,
-                    }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            occlusion_query_set: None,
-            timestamp_writes: None,
-        });
+                                label: Some("Background Pass"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                                            r: 0.1, g: 0.2, b: 0.3, a: 1.0,
+                                        }),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                })],
+                                depth_stencil_attachment: None,
+                                occlusion_query_set: None,
+                                timestamp_writes: None,
+                            });
                         render_pass.set_pipeline(&self.render_pipeline);
                         render_pass.draw(0..3, 0..1);
                 }
@@ -425,38 +418,51 @@ impl State
                         ScreenDescriptor { size_in_pixels: [self.config.width,
                                                             self.config.height],
                                            pixels_per_point: self.window.as_ref().scale_factor()
-                                                             as f32 };
+                                                             as f32
+                                                             * self.gui.scale_factor };
+
+                let mut scale: f32 = self.gui.scale_factor;
 
                 {
                         self.gui.begin_frame(&self.window.clone());
 
                         egui::Window::new("winit + egui + wgpu says hello!")
-            .resizable(true)
-            .vscroll(true)
-            .default_open(false)
-            .show(self.gui.context(), |ui| {
-                ui.label("Label!");
+                            .resizable(true)
+                            .vscroll(true)
+                            .default_open(false)
+                            .show(self.gui.context(), |ui| {
+                                ui.label("Label!");
+                        
+                                if ui.button("Button!").clicked() {
+                                    println!("boom!")
+                                }
+                        
+                                ui.separator();
 
-                if ui.button("Button!").clicked() {
-                    println!("boom!")
-                }
-
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label(format!(
-                        "Pixels per point: {}",
-                        self.gui.context().pixels_per_point()
-                    ));
-                });
-            });
+                                ui.horizontal(|ui| {
+                                    ui.label(format!("Scale: {:.1}", scale));
+                                        
+                                    if ui.button("-").clicked() {
+                                        scale = (scale - 0.1).max(0.3);
+                                    }
+                                    if ui.button("+").clicked() {
+                                        scale = (scale + 0.1).min(3.0);
+                                    } 
+                                    if ui.button("Reset").clicked() {
+                                        scale = 1.0;
+                                    }
+                                });
+                            }); 
 
                         self.gui.end_frame_and_draw(&self.device,
-                                                    &self.queue,
-                                                    &mut encoder,
-                                                    &self.window.clone(),
-                                                    &view,
-                                                    screen_descriptor);
+                                                        &self.queue,
+                                                        &mut encoder,
+                                                        &self.window.clone(),
+                                                        &view,
+                                                        screen_descriptor);
                 }
+
+                self.gui.scale_factor = scale;
 
                 self.queue.submit(std::iter::once(encoder.finish()));
                 output.present();

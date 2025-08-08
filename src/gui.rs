@@ -16,6 +16,7 @@ pub struct GuiRenderer
         state: State,
         renderer: Renderer,
         frame_started: bool,
+        pub scale_factor: f32,
 }
 
 impl GuiRenderer
@@ -28,6 +29,7 @@ impl GuiRenderer
         pub fn new(device: &Device,
                    output_color_format: TextureFormat,
                    output_depth_format: Option<TextureFormat>,
+                   scale_factor: f32,
                    msaa_samples: u32,
                    window: &Window)
                    -> GuiRenderer
@@ -49,6 +51,7 @@ impl GuiRenderer
                                                   true);
 
                 GuiRenderer { state: egui_state,
+                              scale_factor,
                               renderer: egui_renderer,
                               frame_started: false }
         }
