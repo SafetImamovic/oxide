@@ -1,9 +1,9 @@
+use crate::gui::GuiRenderer;
 use egui_wgpu::ScreenDescriptor;
 use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
-use crate::gui::GuiRenderer;
 
 /// Represents the rendering state of the application.
 ///
@@ -65,7 +65,8 @@ pub struct State
 {
         /// A thread-safe reference to the window.
         ///
-        /// We want to store the window in a shared State and pass clones around without worrying about ownership.
+        /// We want to store the window in a shared State and pass clones around
+        /// without worrying about ownership.
         pub window: Arc<Window>,
 
         /// Handle to a rendering (graphics) pipeline.
@@ -75,8 +76,8 @@ pub struct State
 
         /// Handle to a presentable surface.
         ///
-        /// This type is unique to the Rust API of wgpu. In the WebGPU specification,
-        /// `GPUCanvasContext` serves a similar role.
+        /// This type is unique to the Rust API of wgpu. In the WebGPU
+        /// specification, `GPUCanvasContext` serves a similar role.
         ///
         /// Reference: <https://www.w3.org/TR/webgpu/#canvas-rendering>
         pub surface: wgpu::Surface<'static>,
@@ -84,7 +85,8 @@ pub struct State
         /// Open connection to a graphics and/or compute device.
         ///
         /// A `GPUDevice` encapsulates a device and exposes its functionality.
-        /// It is the top-level interface through which WebGPU interfaces are created.
+        /// It is the top-level interface through which WebGPU interfaces are
+        /// created.
         ///
         /// Reference: <https://gpuweb.github.io/gpuweb/#gpu-device>
         pub device: wgpu::Device,
@@ -98,7 +100,8 @@ pub struct State
 
         /// Describes a Surface configuration.
         ///
-        /// Contains surface format, usage flags, width, height, and present mode.
+        /// Contains surface format, usage flags, width, height, and present
+        /// mode.
         ///
         /// Reference: <https://gpuweb.github.io/gpuweb/#canvas-configuration>
         pub config: wgpu::SurfaceConfiguration,
@@ -108,10 +111,8 @@ pub struct State
         /// Rendering commands require a configured surface.
         pub is_surface_configured: bool,
 
+        /// Handles the GUI.
         pub gui: GuiRenderer,
-
-        pub some_val: f64,
-        pub some_text: String,
 }
 
 impl State
@@ -129,99 +130,106 @@ impl State
                 let surface = instance.create_surface(window.clone())?;
 
                 let adapter = instance
-                    .request_adapter(&wgpu::RequestAdapterOptions {
-                            // Either `HighPerformance` or `LowPower`.
-                            //
-                            // 1. LowPower will pick an adapter that favors battery life.
-                            //
-                            // 2. HighPerformance will pick an adapter for more power-hungry
-                            //    yet more performant GPU's, such as a dedicated graphics card.
-                            power_preference: wgpu::PowerPreference::HighPerformance,
+                        .request_adapter(&wgpu::RequestAdapterOptions {
+                                // Either `HighPerformance` or `LowPower`.
+                                //
+                                // 1. LowPower will pick an adapter that favors battery life.
+                                //
+                                // 2. HighPerformance will pick an adapter for more power-hungry yet
+                                //    more performant GPU's, such as a dedicated graphics card.
+                                power_preference: wgpu::PowerPreference::HighPerformance,
 
-                            // Tells wgpu to find an adapter that can present to the supplied surface.
-                            compatible_surface: Some(&surface),
+                                // Tells wgpu to find an adapter that can present to the supplied
+                                // surface.
+                                compatible_surface: Some(&surface),
 
-                            // Forces wgpu to pick an adapter that will work on all hardware.
-                            // Generally a software implementation on most systems.
-                            force_fallback_adapter: false,
-                    })
-                    .await?;
+                                // Forces wgpu to pick an adapter that will work on all hardware.
+                                // Generally a software implementation on most systems.
+                                force_fallback_adapter: false,
+                        })
+                        .await?;
 
                 // Requests a connection to a physical device, creating a logical device.
                 //
                 // Returns the Device together with a Queue that executes command buffers.
                 let (device, queue) = adapter
-                    .request_device(&wgpu::DeviceDescriptor {
-                            label: None,
-                            required_features: wgpu::Features::empty(),
-                            // WebGL doesn't support all of wgpu's features, so if
-                            // we're building for the web we'll have to disable some.
-                            // Describes the limit of certain types of resources that we can create.
-                            //
-                            // Reference <https://gpuweb.github.io/gpuweb/#gpusupportedlimits>
-                            required_limits: if cfg!(target_arch = "wasm32") {
-                                    wgpu::Limits::downlevel_webgl2_defaults()
-                            } else {
-                                    wgpu::Limits::default()
-                            },
+                        .request_device(&wgpu::DeviceDescriptor {
+                                label: None,
+                                required_features: wgpu::Features::empty(),
+                                // WebGL doesn't support all of wgpu's features, so if
+                                // we're building for the web we'll have to disable some.
+                                // Describes the limit of certain types of resources that we can
+                                // create.
+                                //
+                                // Reference <https://gpuweb.github.io/gpuweb/#gpusupportedlimits>
+                                required_limits: if cfg!(target_arch = "wasm32")
+                                {
+                                        wgpu::Limits::downlevel_webgl2_defaults()
+                                }
+                                else
+                                {
+                                        wgpu::Limits::default()
+                                },
 
-                            // Provides the adapter with a preferred memory allocation strategy.
-                            memory_hints: Default::default(),
+                                // Provides the adapter with a preferred memory allocation strategy.
+                                memory_hints: Default::default(),
 
-                            // Debug tracing.
-                            trace: wgpu::Trace::Off,
-                    })
-                    .await?;
+                                // Debug tracing.
+                                trace: wgpu::Trace::Off,
+                        })
+                        .await?;
 
                 // Logs the adapter features.
                 //
                 // Corresponds to these WebGPU feature Reference
                 // <https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename>
                 adapter.features()
-                       .iter()
-                       .for_each(|f| log::info!("FEATURE: {}", f));
+                        .iter()
+                        .for_each(|f| log::info!("FEATURE: {}", f));
 
                 let surface_caps = surface.get_capabilities(&adapter);
 
                 // Represents different Display-Surface sync modes.
                 //
                 // For example, FiFo is essentially VSync.
-                surface_caps.present_modes
-                            .iter()
-                            .for_each(|f| log::info!("{:#?}", f));
+                surface_caps
+                        .present_modes
+                        .iter()
+                        .for_each(|f| log::info!("{:#?}", f));
 
-                let surface_format = surface_caps.formats
-                                                 .iter()
-                                                 .find(|f| f.is_srgb())
-                                                 .copied()
-                                                 .unwrap_or(surface_caps.formats[0]);
+                let surface_format = surface_caps
+                        .formats
+                        .iter()
+                        .find(|f| f.is_srgb())
+                        .copied()
+                        .unwrap_or(surface_caps.formats[0]);
 
-                let config =
-                        wgpu::SurfaceConfiguration { // Describes how SurfaceTextures will be used.
-                                                     // RENDER_ATTACHMET is guaranteed to be supported.
-                                                     usage:
-                                                             wgpu::TextureUsages::RENDER_ATTACHMENT,
+                let config = wgpu::SurfaceConfiguration {
+                        // Describes how SurfaceTextures will be used.
+                        // RENDER_ATTACHMET is guaranteed to be supported.
+                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
 
-                                                     format: surface_format,
+                        format: surface_format,
 
-                                                     width: size.width,
+                        width: size.width,
 
-                                                     height: size.height,
+                        height: size.height,
 
-                                                     #[cfg(target_arch = "wasm32")]
-                                                     present_mode: surface_caps.present_modes[0],
+                        #[cfg(target_arch = "wasm32")]
+                        present_mode: surface_caps.present_modes[0],
 
-                                                     // IMMEDIATE: No VSync for non wasm
-                                                     // environments, because wasm only has 1
-                                                     // present mode.
-                                                     #[cfg(not(target_arch = "wasm32"))]
-                                                     present_mode: surface_caps.present_modes[3],
+                        // IMMEDIATE: No VSync for non wasm
+                        // environments, because wasm only has 1
+                        // present mode.
+                        #[cfg(not(target_arch = "wasm32"))]
+                        present_mode: surface_caps.present_modes[3],
 
-                                                     alpha_mode: surface_caps.alpha_modes[0],
+                        alpha_mode: surface_caps.alpha_modes[0],
 
-                                                     view_formats: vec![],
+                        view_formats: vec![],
 
-                                                     desired_maximum_frame_latency: 2 };
+                        desired_maximum_frame_latency: 2,
+                };
 
                 // Loads the data from the `wgsl` file.
                 let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -231,64 +239,70 @@ impl State
 
                 let render_pipeline_layout =
                         device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: Some("Render Pipeline Layout"),
-                        bind_group_layouts: &[],
-                        push_constant_ranges: &[],
-                });
+                                label: Some("Render Pipeline Layout"),
+                                bind_group_layouts: &[],
+                                push_constant_ranges: &[],
+                        });
 
-                let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                        label: Some("Render Pipeline"),
-                        layout: Some(&render_pipeline_layout),
-                        vertex: wgpu::VertexState {
-                                module: &shader,
-                                entry_point: Some("vs_main"), // 1.
-                                buffers: &[], // 2.
-                                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        },
-                        fragment: Some(wgpu::FragmentState { // 3.
-                                module: &shader,
-                                entry_point: Some("fs_main"),
-                                targets: &[Some(wgpu::ColorTargetState { // 4.
-                                        format: config.format,
-                                        blend: Some(wgpu::BlendState::REPLACE),
-                                        write_mask: wgpu::ColorWrites::ALL,
-                                })],
-                                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        }),
-                        primitive: wgpu::PrimitiveState {
-                                topology: wgpu::PrimitiveTopology::TriangleList, // 1.
-                                strip_index_format: None,
-                                front_face: wgpu::FrontFace::Ccw, // 2.
-                                cull_mode: Some(wgpu::Face::Back),
-                                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                                polygon_mode: wgpu::PolygonMode::Fill,
-                                // Requires Features::DEPTH_CLIP_CONTROL
-                                unclipped_depth: false,
-                                // Requires Features::CONSERVATIVE_RASTERIZATION
-                                conservative: false,
-                        },
-                        depth_stencil: None, // 1.
+                let render_pipeline =
+                        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                                label: Some("Render Pipeline"),
+                                layout: Some(&render_pipeline_layout),
+                                vertex: wgpu::VertexState {
+                                        module: &shader,
+                                        entry_point: Some("vs_main"), // 1.
+                                        buffers: &[],                 // 2.
+                                        compilation_options:
+                                                wgpu::PipelineCompilationOptions::default(),
+                                },
+                                fragment: Some(wgpu::FragmentState {
+                                        // 3.
+                                        module: &shader,
+                                        entry_point: Some("fs_main"),
+                                        targets: &[Some(wgpu::ColorTargetState {
+                                                // 4.
+                                                format: config.format,
+                                                blend: Some(wgpu::BlendState::REPLACE),
+                                                write_mask: wgpu::ColorWrites::ALL,
+                                        })],
+                                        compilation_options:
+                                                wgpu::PipelineCompilationOptions::default(),
+                                }),
+                                primitive: wgpu::PrimitiveState {
+                                        topology: wgpu::PrimitiveTopology::TriangleList, // 1.
+                                        strip_index_format: None,
+                                        front_face: wgpu::FrontFace::Ccw, // 2.
+                                        cull_mode: Some(wgpu::Face::Back),
+                                        // Setting this to anything other than Fill requires
+                                        // Features::NON_FILL_POLYGON_MODE
+                                        polygon_mode: wgpu::PolygonMode::Fill,
+                                        // Requires Features::DEPTH_CLIP_CONTROL
+                                        unclipped_depth: false,
+                                        // Requires Features::CONSERVATIVE_RASTERIZATION
+                                        conservative: false,
+                                },
+                                depth_stencil: None, // 1.
                                 multisample: wgpu::MultisampleState {
-                                        count: 1, // 2.
-                                        mask: !0, // 3.
+                                        count: 1,                         // 2.
+                                        mask: !0,                         // 3.
                                         alpha_to_coverage_enabled: false, // 4.
                                 },
                                 multiview: None, // 5.
-                                cache: None, // 6.
+                                cache: None,     // 6.
                         });
 
                 let gui = GuiRenderer::new(&device, config.format, None, 1.0, 1, &window);
 
-                Ok(State { window,
-                           some_val: 0.0,
-                           some_text: String::from("Ur mom."),
-                           gui,
-                           render_pipeline,
-                           surface,
-                           device,
-                           queue,
-                           config,
-                           is_surface_configured: false })
+                Ok(State {
+                        window,
+                        gui,
+                        render_pipeline,
+                        surface,
+                        device,
+                        queue,
+                        config,
+                        is_surface_configured: false,
+                })
         }
 
         /// Instance of wgpu.
@@ -298,23 +312,29 @@ impl State
         /// GPU ([`wgpu::Instance`]) is the entry point to `WebGPU`.
         /// Reference <https://gpuweb.github.io/gpuweb/#gpu-interface>
         ///
-        /// Defined via [`wgpu::InstanceDecsriptor`], this represents Options for creating an instance.
-        /// Reference <https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html>
+        /// Defined via [`wgpu::InstanceDecsriptor`], this represents Options
+        /// for creating an instance. Reference <https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html>
         ///
         /// ```text
         /// BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU.
         /// ```
         fn new_instance() -> wgpu::Instance
         {
-                wgpu::Instance::new(&wgpu::InstanceDescriptor { #[cfg(not(target_arch = "wasm32"))]
-                                                                backends:
-                                                                        wgpu::Backends::PRIMARY,
-                                                                #[cfg(target_arch = "wasm32")]
-                                                                backends: wgpu::Backends::GL,
-                                                                ..Default::default() })
+                wgpu::Instance::new(&wgpu::InstanceDescriptor {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        backends: wgpu::Backends::PRIMARY,
+                        #[cfg(target_arch = "wasm32")]
+                        backends: wgpu::Backends::GL,
+                        ..Default::default()
+                })
         }
 
-        pub fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool)
+        pub fn handle_key(
+                &self,
+                event_loop: &ActiveEventLoop,
+                code: KeyCode,
+                is_pressed: bool,
+        )
         {
                 log::info!("{:#?}", code);
 
@@ -331,7 +351,11 @@ impl State
         /// # Parameters
         /// - `width`: New window width in pixels
         /// - `height`: New window height in pixels
-        pub fn resize(&mut self, width: u32, height: u32)
+        pub fn resize(
+                &mut self,
+                width: u32,
+                height: u32,
+        )
         {
                 if width == 0 || height == 0
                 {
@@ -343,9 +367,7 @@ impl State
                 let final_width = width.min(max_dim);
                 let final_height = height.min(max_dim);
 
-                log::info!("Resizing surface -> width: {}, height: {}",
-                           final_width,
-                           final_height);
+                log::info!("Resizing surface -> width: {}, height: {}", final_width, final_height);
 
                 self.config.width = final_width;
                 self.config.height = final_height;
@@ -385,84 +407,66 @@ impl State
                         }
                 };
 
-                let view = output.texture
-                                 .create_view(&wgpu::TextureViewDescriptor::default());
+                let view = output
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
 
-                let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("Main Render Encoder"),
-                });
+                let mut encoder =
+                        self.device
+                                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                        label: Some("Main Render Encoder"),
+                                });
 
                 // 1. First render your background
                 {
-                        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("Background Pass"),
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view: &view,
-                                    resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                                            r: 0.1, g: 0.2, b: 0.3, a: 1.0,
-                                        }),
-                                        store: wgpu::StoreOp::Store,
-                                    },
-                                })],
-                                depth_stencil_attachment: None,
-                                occlusion_query_set: None,
-                                timestamp_writes: None,
-                            });
+                        let mut render_pass =
+                                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                        label: Some("Background Pass"),
+                                        color_attachments: &[Some(
+                                                wgpu::RenderPassColorAttachment {
+                                                        view: &view,
+                                                        resolve_target: None,
+                                                        ops: wgpu::Operations {
+                                                                load: wgpu::LoadOp::Clear(
+                                                                        wgpu::Color {
+                                                                                r: 0.1,
+                                                                                g: 0.2,
+                                                                                b: 0.3,
+                                                                                a: 1.0,
+                                                                        },
+                                                                ),
+                                                                store: wgpu::StoreOp::Store,
+                                                        },
+                                                },
+                                        )],
+                                        depth_stencil_attachment: None,
+                                        occlusion_query_set: None,
+                                        timestamp_writes: None,
+                                });
                         render_pass.set_pipeline(&self.render_pipeline);
                         render_pass.draw(0..3, 0..1);
                 }
 
-                let screen_descriptor =
-                        ScreenDescriptor { size_in_pixels: [self.config.width,
-                                                            self.config.height],
-                                           pixels_per_point: self.window.as_ref().scale_factor()
-                                                             as f32
-                                                             * self.gui.scale_factor };
-
-                let mut scale: f32 = self.gui.scale_factor;
+                let screen_descriptor = ScreenDescriptor {
+                        size_in_pixels: [self.config.width, self.config.height],
+                        pixels_per_point: self.window.as_ref().scale_factor() as f32
+                                * self.gui.scale_factor,
+                };
 
                 {
                         self.gui.begin_frame(&self.window.clone());
 
-                        egui::Window::new("winit + egui + wgpu says hello!")
-                            .resizable(true)
-                            .vscroll(true)
-                            .default_open(false)
-                            .show(self.gui.context(), |ui| {
-                                ui.label("Label!");
-                        
-                                if ui.button("Button!").clicked() {
-                                    println!("boom!")
-                                }
-                        
-                                ui.separator();
+                        self.gui.render();
 
-                                ui.horizontal(|ui| {
-                                    ui.label(format!("Scale: {:.1}", scale));
-                                        
-                                    if ui.button("-").clicked() {
-                                        scale = (scale - 0.1).max(0.3);
-                                    }
-                                    if ui.button("+").clicked() {
-                                        scale = (scale + 0.1).min(3.0);
-                                    } 
-                                    if ui.button("Reset").clicked() {
-                                        scale = 1.0;
-                                    }
-                                });
-                            }); 
-
-                        self.gui.end_frame_and_draw(&self.device,
-                                                        &self.queue,
-                                                        &mut encoder,
-                                                        &self.window.clone(),
-                                                        &view,
-                                                        screen_descriptor);
+                        self.gui.end_frame_and_draw(
+                                &self.device,
+                                &self.queue,
+                                &mut encoder,
+                                &self.window.clone(),
+                                &view,
+                                screen_descriptor,
+                        );
                 }
-
-                self.gui.scale_factor = scale;
 
                 self.queue.submit(std::iter::once(encoder.finish()));
                 output.present();

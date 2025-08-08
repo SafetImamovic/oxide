@@ -1,4 +1,8 @@
 brace_style = "AlwaysNextLine"
 control_brace_style = "AlwaysNextLine"
-indent_style = "Visual"
 tab_spaces = 8
+fn_params_layout = "Vertical"
+struct_lit_single_line = false
+indent_style = "Block"
+fn_call_width = 100
+wrap_comments = true

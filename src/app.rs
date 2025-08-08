@@ -42,17 +42,20 @@ impl App
         /// # Platform differences
         /// - On native builds, the event loop is created without a proxy.
         /// - On `wasm32`, a proxy is created to allow async initialization.
-        pub fn new(config: Config,
-                   #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<State>)
-                   -> Self
+        pub fn new(
+                config: Config,
+                #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<State>,
+        ) -> Self
         {
                 #[cfg(target_arch = "wasm32")]
                 let proxy = Some(event_loop.create_proxy());
 
-                Self { state: None,
-                       config,
-                       #[cfg(target_arch = "wasm32")]
-                       proxy }
+                Self {
+                        state: None,
+                        config,
+                        #[cfg(target_arch = "wasm32")]
+                        proxy,
+                }
         }
 
         fn resize(&mut self)
@@ -65,8 +68,10 @@ impl App
 
                 #[cfg(target_arch = "wasm32")]
                 {
-                        state.resize(self.config.default_canvas_width,
-                                     self.config.default_canvas_height);
+                        state.resize(
+                                self.config.default_canvas_width,
+                                self.config.default_canvas_height,
+                        );
                 }
 
                 #[cfg(not(target_arch = "wasm32"))]
@@ -82,7 +87,10 @@ impl ApplicationHandler<State> for App
         /// Called when the application is resumed.
         ///
         /// Creates the window and initializes the rendering state.
-        fn resumed(&mut self, event_loop: &ActiveEventLoop)
+        fn resumed(
+                &mut self,
+                event_loop: &ActiveEventLoop,
+        )
         {
                 #[allow(unused_mut)]
                 let mut window_attributes = Window::default_attributes();
@@ -118,12 +126,12 @@ impl ApplicationHandler<State> for App
                         {
                                 wasm_bindgen_futures::spawn_local(async move {
                                         assert!(proxy
-                        .send_event(
-                            State::new(window)
-                                .await
-                                .expect("Unable to create canvas!")
-                        )
-                        .is_ok())
+                                                .send_event(
+                                                        State::new(window)
+                                                                .await
+                                                                .expect("Unable to create canvas!")
+                                                )
+                                                .is_ok())
                                 });
                         }
                 }
@@ -131,9 +139,13 @@ impl ApplicationHandler<State> for App
 
         /// Handles custom user events.
         ///
-        /// On WASM, async initialization sends the completed [`State`] via a proxy,
-        /// which is received here and stored.
-        fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: State)
+        /// On WASM, async initialization sends the completed [`State`] via a
+        /// proxy, which is received here and stored.
+        fn user_event(
+                &mut self,
+                _event_loop: &ActiveEventLoop,
+                event: State,
+        )
         {
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -150,10 +162,12 @@ impl ApplicationHandler<State> for App
         /// - Resizing
         /// - Redraw requests
         /// - Keyboard input
-        fn window_event(&mut self,
-                        event_loop: &ActiveEventLoop,
-                        _window_id: winit::window::WindowId,
-                        event: WindowEvent)
+        fn window_event(
+                &mut self,
+                event_loop: &ActiveEventLoop,
+                _window_id: winit::window::WindowId,
+                event: WindowEvent,
+        )
         {
                 let state = match &mut self.state
                 {
@@ -174,8 +188,10 @@ impl ApplicationHandler<State> for App
                                         Ok(_) =>
                                         {}
                                         // Reconfigure the surface if it's lost or outdated
-                                        Err(wgpu::SurfaceError::Lost
-                                            | wgpu::SurfaceError::Outdated) =>
+                                        Err(
+                                                wgpu::SurfaceError::Lost
+                                                | wgpu::SurfaceError::Outdated,
+                                        ) =>
                                         {
                                                 self.resize();
                                         }
@@ -185,8 +201,11 @@ impl ApplicationHandler<State> for App
                                         }
                                 }
                         }
-                        WindowEvent::MouseInput { state, button, .. } => match (button,
-                                                                                state.is_pressed())
+                        WindowEvent::MouseInput {
+                                state,
+                                button,
+                                ..
+                        } => match (button, state.is_pressed())
                         {
                                 (MouseButton::Left, true) =>
                                 {}
@@ -195,15 +214,15 @@ impl ApplicationHandler<State> for App
                                 _ =>
                                 {}
                         },
-                        WindowEvent::KeyboardInput { event:
-                                                             KeyEvent { physical_key:
-                                                                                PhysicalKey::Code(code),
-                                                                        state: key_state,
-                                                                        .. },
-                                                     .. } =>
-                        {
-                                state.handle_key(event_loop, code, key_state.is_pressed())
-                        }
+                        WindowEvent::KeyboardInput {
+                                event:
+                                        KeyEvent {
+                                                physical_key: PhysicalKey::Code(code),
+                                                state: key_state,
+                                                ..
+                                        },
+                                ..
+                        } => state.handle_key(event_loop, code, key_state.is_pressed()),
 
                         _ =>
                         {}

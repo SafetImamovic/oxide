@@ -28,9 +28,11 @@ impl Default for Config
 {
         fn default() -> Self
         {
-                Self { #[cfg(target_arch = "wasm32")]
-                       default_canvas_width: 1280,
-                       #[cfg(target_arch = "wasm32")]
-                       default_canvas_height: 720 }
+                Self {
+                        #[cfg(target_arch = "wasm32")]
+                        default_canvas_width: 1280,
+                        #[cfg(target_arch = "wasm32")]
+                        default_canvas_height: 720,
+                }
         }
 }
