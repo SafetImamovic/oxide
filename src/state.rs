@@ -1,5 +1,7 @@
+use egui::Label;
 use egui_wgpu::ScreenDescriptor;
 use std::sync::Arc;
+use wgpu::{SurfaceError, TextureFormat};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
@@ -110,6 +112,9 @@ pub struct State
         pub is_surface_configured: bool,
 
         pub gui: GuiRenderer,
+
+        pub some_val: f64,
+        pub some_text: String,
 }
 
 impl State
@@ -275,9 +280,11 @@ impl State
                                 cache: None, // 6.
                         });
 
-                let gui = GuiRenderer::new(&device, &config.format, 1, &window)?;
+                let gui = GuiRenderer::new(&device, config.format, None, 1, &window);
 
                 Ok(State { window,
+                           some_val: 0.0,
+                           some_text: String::from("Ur mom."),
                            gui,
                            render_pipeline,
                            surface,
@@ -364,7 +371,23 @@ impl State
                         return Ok(());
                 }
 
-                let output = self.surface.get_current_texture()?;
+                // Get the surface texture ONCE per frame
+                let output = match self.surface.get_current_texture()
+                {
+                        Ok(frame) => frame,
+                        Err(wgpu::SurfaceError::Outdated) =>
+                        {
+                                // This often happens during window resizing
+                                println!("wgpu surface outdated");
+                                return Err(wgpu::SurfaceError::Outdated);
+                        }
+                        Err(e) =>
+                        {
+                                eprintln!("Failed to acquire surface texture: {:?}", e);
+                                return Err(e);
+                        }
+                };
+
                 let view = output.texture
                                  .create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -398,29 +421,42 @@ impl State
                         render_pass.draw(0..3, 0..1);
                 }
 
-                // 2. Then render the GUI
-                self.gui.draw(
-                              &self.device,
-                              &self.queue,
-                              &mut encoder,
-                              &self.window,
-                              &view,
-                              ScreenDescriptor {
-            size_in_pixels: [window_size.width, window_size.height],
-            pixels_per_point: scale_factor as f32, // Use actual scale factor
-        },
-                              &mut |ui| {
-                                      egui::Window::new("Settings").resizable(true)
-                                                                   .vscroll(true)
-                                                                   .default_open(true) // Changed to true for testing
-                                                                   .show(ui, |ui| {
-                                                                           ui.label("Window!");
-                                                                           ui.label("Window!");
-                                                                           ui.label("Window!");
-                                                                           ui.label("Window!");
-                                                                   });
-                              },
-                );
+                let screen_descriptor =
+                        ScreenDescriptor { size_in_pixels: [self.config.width,
+                                                            self.config.height],
+                                           pixels_per_point: self.window.as_ref().scale_factor()
+                                                             as f32 };
+
+                {
+                        self.gui.begin_frame(&self.window.clone());
+
+                        egui::Window::new("winit + egui + wgpu says hello!")
+            .resizable(true)
+            .vscroll(true)
+            .default_open(false)
+            .show(self.gui.context(), |ui| {
+                ui.label("Label!");
+
+                if ui.button("Button!").clicked() {
+                    println!("boom!")
+                }
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label(format!(
+                        "Pixels per point: {}",
+                        self.gui.context().pixels_per_point()
+                    ));
+                });
+            });
+
+                        self.gui.end_frame_and_draw(&self.device,
+                                                    &self.queue,
+                                                    &mut encoder,
+                                                    &self.window.clone(),
+                                                    &view,
+                                                    screen_descriptor);
+                }
 
                 self.queue.submit(std::iter::once(encoder.finish()));
                 output.present();

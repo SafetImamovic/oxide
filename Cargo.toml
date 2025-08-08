@@ -22,7 +22,7 @@ wgpu = "25.0.2"
 pollster = "0.4.0"
 
 # Modified egui dependencies without clipboard
-egui = { version = "0.32.0", default-features = false, features = [] }
+egui = { version = "0.32.0",  features = [] }
 egui-wgpu = { version = "0.32.0", default-features = false }
 egui-winit = { version = "0.32.0", default-features = false }
 
@@ -37,7 +37,6 @@ web-sys = { version = "0.3.77", features = [
     "Window",
     "Element",
     "Navigator"
-    # Removed "Clipboard" feature
 ]}
 # Modified egui for WASM without clipboard
 egui = { version = "0.32.0", default-features = false, features = [] }

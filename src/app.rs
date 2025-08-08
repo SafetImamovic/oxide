@@ -161,7 +161,7 @@ impl ApplicationHandler<State> for App
                         None => return,
                 };
 
-                state.gui.handle_input(&state.window, &event);
+                state.gui.handle_input(&state.window.clone(), &event);
 
                 match event
                 {
@@ -204,6 +204,7 @@ impl ApplicationHandler<State> for App
                         {
                                 state.handle_key(event_loop, code, key_state.is_pressed())
                         }
+
                         _ =>
                         {}
                 }

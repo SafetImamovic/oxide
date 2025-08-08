@@ -1,72 +1,98 @@
-use egui::{Context, ViewportId};
+use egui::Context;
 use egui_wgpu::Renderer;
+use egui_wgpu::ScreenDescriptor;
 use egui_winit::State;
+use wgpu::CommandEncoder;
 use wgpu::Device;
+use wgpu::Queue;
+use wgpu::StoreOp;
 use wgpu::TextureFormat;
+use wgpu::TextureView;
 use winit::event::WindowEvent;
-use winit::window::Theme;
 use winit::window::Window;
 
 pub struct GuiRenderer
 {
-        pub context: Context,
         state: State,
         renderer: Renderer,
+        frame_started: bool,
 }
 
 impl GuiRenderer
 {
+        pub fn context(&self) -> &Context
+        {
+                self.state.egui_ctx()
+        }
+
         pub fn new(device: &Device,
-                   output_color_format: &TextureFormat,
+                   output_color_format: TextureFormat,
+                   output_depth_format: Option<TextureFormat>,
                    msaa_samples: u32,
                    window: &Window)
-                   -> anyhow::Result<GuiRenderer>
+                   -> GuiRenderer
         {
                 let egui_context = Context::default();
 
-                let egui_state = egui_winit::State::new(egui_context.clone(),
-                                                        ViewportId::from_hash_of(window.id()),
-                                                        &window,
-                                                        Some(window.scale_factor() as f32),
-                                                        Some(Theme::Dark),
-                                                        None);
+                let egui_state = egui_winit::State::new(
+            egui_context,
+            egui::viewport::ViewportId::ROOT,
+            &window,
+            Some(window.scale_factor() as f32),
+            None,
+            Some(2 * 1024), // default dimension is 2048
+        );
+                let egui_renderer = Renderer::new(device,
+                                                  output_color_format,
+                                                  output_depth_format,
+                                                  msaa_samples,
+                                                  true);
 
-                let egui_renderer = egui_wgpu::Renderer::new(device,
-                                                             *output_color_format,
-                                                             None,
-                                                             msaa_samples,
-                                                             false);
-
-                Ok(GuiRenderer { context: egui_context,
-                                 state: egui_state,
-                                 renderer: egui_renderer })
+                GuiRenderer { state: egui_state,
+                              renderer: egui_renderer,
+                              frame_started: false }
         }
 
         pub fn handle_input(&mut self, window: &Window, event: &WindowEvent)
         {
-                let _ = self.state.on_window_event(&window, &event);
+                let _ = self.state.on_window_event(window, event);
         }
 
-        pub fn draw(&mut self,
-                    device: &wgpu::Device,
-                    queue: &wgpu::Queue,
-                    encoder: &mut wgpu::CommandEncoder,
-                    window: &Window,
-                    window_surface_view: &wgpu::TextureView,
-                    screen_descriptor: egui_wgpu::ScreenDescriptor,
-                    run_ui: &mut impl FnMut(&egui::Context))
+        pub fn ppp(&mut self, v: f32)
         {
-                // Handle input and run UI
+                self.context().set_pixels_per_point(v);
+        }
+
+        pub fn begin_frame(&mut self, window: &Window)
+        {
                 let raw_input = self.state.take_egui_input(window);
-                let full_output = self.context.run(raw_input, |_ui| {
-                                                      run_ui(&self.context);
-                                              });
+                self.state.egui_ctx().begin_pass(raw_input);
+                self.frame_started = true;
+        }
+
+        pub fn end_frame_and_draw(&mut self,
+                                  device: &Device,
+                                  queue: &Queue,
+                                  encoder: &mut CommandEncoder,
+                                  window: &Window,
+                                  window_surface_view: &TextureView,
+                                  screen_descriptor: ScreenDescriptor)
+        {
+                if !self.frame_started
+                {
+                        panic!("begin_frame must be called before end_frame_and_draw can be called!");
+                }
+
+                self.ppp(screen_descriptor.pixels_per_point);
+
+                let full_output = self.state.egui_ctx().end_pass();
+
                 self.state
                     .handle_platform_output(window, full_output.platform_output);
 
-                // Process paint jobs and textures
-                let tris = self.context
-                               .tessellate(full_output.shapes, full_output.pixels_per_point);
+                let tris =
+                        self.state.egui_ctx().tessellate(full_output.shapes,
+                                                         self.state.egui_ctx().pixels_per_point());
                 for (id, image_delta) in &full_output.textures_delta.set
                 {
                         self.renderer
@@ -74,33 +100,28 @@ impl GuiRenderer
                 }
                 self.renderer
                     .update_buffers(device, queue, encoder, &tris, &screen_descriptor);
-
-                // Create render pass with forget_lifetime()
-                let  rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("egui main render pass"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: window_surface_view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        occlusion_query_set: None,
-                        timestamp_writes: None,
-                });
-
-                // SAFETY: We ensure all resources live long enough
-                let mut rpass_static = unsafe { rpass.forget_lifetime() };
+                let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: window_surface_view,
+                resolve_target: None,
+                ops: egui_wgpu::wgpu::Operations {
+                    load: egui_wgpu::wgpu::LoadOp::Load,
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            label: Some("egui main render pass"),
+            occlusion_query_set: None,
+        });
 
                 self.renderer
-                    .render(&mut rpass_static, &tris, &screen_descriptor);
-
-                // Free textures
+                    .render(&mut rpass.forget_lifetime(), &tris, &screen_descriptor);
                 for x in &full_output.textures_delta.free
                 {
-                        self.renderer.free_texture(x);
+                        self.renderer.free_texture(x)
                 }
+
+                self.frame_started = false;
         }
 }
