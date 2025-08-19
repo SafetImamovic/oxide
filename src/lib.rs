@@ -25,6 +25,9 @@ pub mod state;
 /// are only compiled for WebAssembly builds, keeping native
 /// binaries clean and free of unnecessary dependencies.
 #[cfg(target_arch = "wasm32")]
+use winit::platform::web::EventLoopExtWebSys;
+
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 use crate::{app::App, config::Config};
@@ -62,6 +65,10 @@ pub fn run() -> anyhow::Result<()>
                 &event_loop,
         );
 
+        #[cfg(target_arch = "wasm32")]
+        event_loop.spawn_app(Box::leak(Box::new(app)));
+
+        #[cfg(not(target_arch = "wasm32"))]
         event_loop.run_app(&mut app)?;
 
         log::info!("Oxide has been brutally killed and left to die in a ditch.");
