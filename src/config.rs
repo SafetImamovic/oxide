@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+/// Top level Configuration struct for oxide.
 #[derive(Debug, Deserialize)]
 pub struct Config
 {
@@ -12,6 +13,13 @@ pub struct Config
 
 impl Config
 {
+        /// Constructs a new `Config` object from the configuration
+        /// `config.toml` file.
+        ///
+        /// TODO: Path is hardcoded at this moment to "../config.toml",
+        /// this means that the content from the text file is included within
+        /// the library during the compilation step rather than being
+        /// decoded at runtime.
         pub fn from_file() -> anyhow::Result<Self>
         {
                 let cfg = std::include_str!("../config.toml").to_string();
@@ -24,13 +32,16 @@ impl Config
         }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for Config
 {
         fn default() -> Self
         {
-                Self { #[cfg(target_arch = "wasm32")]
-                       default_canvas_width: 1280,
-                       #[cfg(target_arch = "wasm32")]
-                       default_canvas_height: 720 }
+                Self {
+                        #[cfg(target_arch = "wasm32")]
+                        default_canvas_width: 1280,
+                        #[cfg(target_arch = "wasm32")]
+                        default_canvas_height: 720,
+                }
         }
 }

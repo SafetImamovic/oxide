@@ -1,30 +1,32 @@
 pub mod app;
 pub mod config;
+pub mod gui;
 pub mod state;
-
-use std::process;
 
 /// WebAssembly (WASM) architecture note:
 ///
 /// We explicitly target `wasm32` instead of `wasm64` because:
 ///
-/// 1. The current WebAssembly specification and all major browsers
-///    (Chrome, Firefox, Safari, Edge) only support a 32-bit memory model.
-///    Each WASM module can address up to 4 GB of linear memory.
+/// 1. The current WebAssembly specification and all major browsers (Chrome,
+///    Firefox, Safari, Edge) only support a 32-bit memory model. Each WASM
+///    module can address up to 4 GB of linear memory.
 ///
-/// 2. The Rust toolchain (`rustc`, `wasm-bindgen`, `web-sys`, `wgpu`)
-///    provides stable support only for 32-bit targets:
+/// 2. The Rust toolchain (`rustc`, `wasm-bindgen`, `web-sys`, `wgpu`) provides
+///    stable support only for 32-bit targets:
 ///        - wasm32-unknown-unknown
 ///        - wasm32-wasi
 ///        - wasm32-unknown-emscripten
 ///
-/// 3. `wasm64` is experimental and not yet standardized or implemented
-///    in production environments.
+/// 3. `wasm64` is experimental and not yet standardized or implemented in
+///    production environments.
 ///
 /// Using `#[cfg(target_arch = "wasm32")]` ensures that
 /// WASM-specific imports and bindings (e.g., `wasm_bindgen`)
 /// are only compiled for WebAssembly builds, keeping native
 /// binaries clean and free of unnecessary dependencies.
+#[cfg(target_arch = "wasm32")]
+use winit::platform::web::EventLoopExtWebSys;
+
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -32,31 +34,45 @@ use crate::{app::App, config::Config};
 use winit::event_loop::EventLoop;
 
 /// Starts the application in native or WASM environments.
-///
-/// # Returns
-/// - `Ok(())` if the application exits successfully.
-/// - An error if initialization fails.
-///
 pub fn run() -> anyhow::Result<()>
 {
+        log::info!("Oxide initialized.");
+
         #[cfg(not(target_arch = "wasm32"))]
-        env_logger::init();
+        {
+                env_logger::init();
+
+                log::info!("Running on native.");
+        }
 
         #[cfg(target_arch = "wasm32")]
-        console_log::init_with_level(log::Level::Info).unwrap_throw();
+        {
+                console_log::init_with_level(log::Level::Info).unwrap_throw();
+
+                log::info!("Running on wasm32.");
+        }
 
         let event_loop = EventLoop::with_user_event().build()?;
 
         let config = Config::from_file().unwrap_or_else(|err| {
-                                                log::info!("ERRAH! {err}");
-                                                Config::default()
-                                        });
+                log::warn!("Failed to load config: {err}, falling back to default");
+                Config::default()
+        });
 
-        let mut app = App::new(config,
-                               #[cfg(target_arch = "wasm32")]
-                               &event_loop);
+        #[allow(unused_mut)]
+        let mut app = App::new(
+                config,
+                #[cfg(target_arch = "wasm32")]
+                &event_loop,
+        );
 
+        #[cfg(target_arch = "wasm32")]
+        event_loop.spawn_app(Box::leak(Box::new(app)));
+
+        #[cfg(not(target_arch = "wasm32"))]
         event_loop.run_app(&mut app)?;
+
+        log::info!("Oxide has been brutally killed and left to die in a ditch.");
 
         Ok(())
 }

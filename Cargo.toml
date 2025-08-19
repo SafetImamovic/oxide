@@ -18,18 +18,25 @@ anyhow = "1.0.98"
 winit = { version = "0.30.12", features = ["android-native-activity"] }
 env_logger = "0.11.8"
 log = "0.4.27"
-wgpu = "26.0.1"
+wgpu = "25.0.2"
 pollster = "0.4.0"
+
+# Modified egui dependencies without clipboard
+egui = { version = "0.32.0",  features = [] }
+egui-wgpu = { version = "0.32.0", default-features = false }
+egui-winit = { version = "0.32.0", default-features = false }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
-wgpu = { version = "26.0.1", features = ["webgl"]}
+wgpu = { version = "25.0.2", features = ["webgl"]}
 wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "0.4.50"
 web-sys = { version = "0.3.77", features = [
     "Document",
     "Window",
     "Element",
+    "Navigator"
 ]}
-
+# Modified egui for WASM without clipboard
+egui = { version = "0.32.0", default-features = false, features = [] }
