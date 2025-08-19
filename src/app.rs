@@ -68,10 +68,8 @@ impl App
 
                 #[cfg(target_arch = "wasm32")]
                 {
-                        state.resize(
-                                self.config.default_canvas_width,
-                                self.config.default_canvas_height,
-                        );
+                        let (width, height) = crate::get_body_size().unwrap();
+                        state.resize(width, height);
                 }
 
                 #[cfg(not(target_arch = "wasm32"))]

@@ -91,3 +91,21 @@ pub fn run_web() -> Result<(), wasm_bindgen::JsValue>
 
         Ok(())
 }
+
+#[cfg(target_arch = "wasm32")]
+pub fn get_body_size() -> Option<(u32, u32)>
+{
+        let window = web_sys::window()?;
+
+        let document = window.document()?;
+
+        let body = document.body()?;
+
+        let width = body.client_width() as u32;
+
+        let height = body.client_height() as u32;
+
+        log::info!("Body: {}, {}", width, height);
+
+        Some((width, height))
+}
