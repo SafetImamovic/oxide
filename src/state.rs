@@ -1,6 +1,5 @@
 use crate::gui::GuiRenderer;
 use egui_wgpu::ScreenDescriptor;
-use std::path::Path;
 use std::sync::Arc;
 use winit::dpi::PhysicalSize;
 use winit::event_loop::ActiveEventLoop;
@@ -21,8 +20,12 @@ use winit::window::Window;
 ///
 /// ```text
 /// +--------------------+
-/// |     Application    |
-/// |     (your code)    |
+/// |       Oxide        |
+/// +---------+----------+
+///           |
+///           v
+/// +--------------------+
+/// |     Instance       |
 /// +---------+----------+
 ///           |
 ///           v
@@ -37,6 +40,10 @@ use winit::window::Window;
 /// |   SurfaceConfig    |           |
 /// +---------+----------+           |
 ///           |                      |
+///           v                      |
+/// +--------------------+           |
+/// |      Adapter       |           |
+/// +---------+----------+           |
 ///           |                      |
 ///           v                      |
 /// +--------------------+   create  |
@@ -199,7 +206,7 @@ impl State
                 surface_caps
                         .present_modes
                         .iter()
-                        .for_each(|f| log::info!("{:#?}", f));
+                        .for_each(|f| log::info!("PRESENT_MODE: {:?}", f));
         }
 
         fn get_surface_config(
@@ -308,12 +315,28 @@ impl State
                 })
         }
 
+        fn log_all_backends()
+        {
+                let backends = wgpu::Backends::all();
+
+                log::info!("Available backends: {:?}", backends);
+        }
+
+        fn log_current_backend(adapter: &wgpu::Adapter)
+        {
+                let backend = adapter.get_info().backend;
+
+                log::info!("Current backend: {:?}", backend);
+        }
+
         /// Asynchronously creates a new [`State`] instance.
         ///
         /// Initializes rendering resources and prepares the engine
         /// for drawing.
         pub async fn new(window: Arc<Window>) -> anyhow::Result<State>
         {
+                Self::log_all_backends();
+
                 let size = window.inner_size();
 
                 let instance = Self::new_instance();
@@ -321,6 +344,8 @@ impl State
                 let surface = instance.create_surface(window.clone())?;
 
                 let adapter = Self::get_adapter(&instance, &surface).await?;
+
+                Self::log_current_backend(&adapter);
 
                 let (device, queue) = Self::get_device_and_queue(&adapter).await?;
 

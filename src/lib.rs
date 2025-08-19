@@ -59,6 +59,7 @@ pub fn run() -> anyhow::Result<()>
                 Config::default()
         });
 
+        #[allow(unused_mut)]
         let mut app = App::new(
                 config,
                 #[cfg(target_arch = "wasm32")]

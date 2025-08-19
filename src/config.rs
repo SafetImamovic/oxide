@@ -32,6 +32,7 @@ impl Config
         }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for Config
 {
         fn default() -> Self
