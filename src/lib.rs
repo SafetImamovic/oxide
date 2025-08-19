@@ -25,38 +25,54 @@ pub mod state;
 /// are only compiled for WebAssembly builds, keeping native
 /// binaries clean and free of unnecessary dependencies.
 #[cfg(target_arch = "wasm32")]
+use winit::platform::web::EventLoopExtWebSys;
+
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 use crate::{app::App, config::Config};
 use winit::event_loop::EventLoop;
 
 /// Starts the application in native or WASM environments.
-///
-/// # Returns
-/// - `Ok(())` if the application exits successfully.
-/// - An error if initialization fails.
 pub fn run() -> anyhow::Result<()>
 {
+        log::info!("Oxide initialized.");
+
         #[cfg(not(target_arch = "wasm32"))]
-        env_logger::init();
+        {
+                env_logger::init();
+
+                log::info!("Running on native.");
+        }
 
         #[cfg(target_arch = "wasm32")]
-        console_log::init_with_level(log::Level::Info).unwrap_throw();
+        {
+                console_log::init_with_level(log::Level::Info).unwrap_throw();
+
+                log::info!("Running on wasm32.");
+        }
 
         let event_loop = EventLoop::with_user_event().build()?;
 
         let config = Config::from_file().unwrap_or_else(|err| {
-                log::info!("ERRAH! {err}");
+                log::warn!("Failed to load config: {err}, falling back to default");
                 Config::default()
         });
 
+        #[allow(unused_mut)]
         let mut app = App::new(
                 config,
                 #[cfg(target_arch = "wasm32")]
                 &event_loop,
         );
 
+        #[cfg(target_arch = "wasm32")]
+        event_loop.spawn_app(Box::leak(Box::new(app)));
+
+        #[cfg(not(target_arch = "wasm32"))]
         event_loop.run_app(&mut app)?;
+
+        log::info!("Oxide has been brutally killed and left to die in a ditch.");
 
         Ok(())
 }
