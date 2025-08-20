@@ -1,4 +1,5 @@
 use egui::Context;
+use egui::Ui;
 use egui_wgpu::Renderer;
 use egui_wgpu::ScreenDescriptor;
 use egui_winit::State;
@@ -149,28 +150,35 @@ impl GuiRenderer
 
         pub fn render(&mut self)
         {
+                self.debug_window();
+        }
+
+        pub fn debug_window(&mut self)
+        {
                 let mut scale: f32 = self.scale_factor;
+
+                let ui_def = |ui: &mut Ui| {
+                        ui.label(format!("Scale: {:.1}", scale));
+                        if ui.button("-").clicked()
+                        {
+                                scale = (scale - 0.1).max(0.3);
+                        }
+                        if ui.button("+").clicked()
+                        {
+                                scale = (scale + 0.1).min(3.0);
+                        }
+                        if ui.button("Reset").clicked()
+                        {
+                                scale = 1.0;
+                        }
+                };
 
                 egui::Window::new("Oxide Debug Window")
                         .resizable(true)
                         .vscroll(true)
                         .default_open(false)
                         .show(self.context(), |ui| {
-                                ui.horizontal(|ui| {
-                                        ui.label(format!("Scale: {:.1}", scale));
-                                        if ui.button("-").clicked()
-                                        {
-                                                scale = (scale - 0.1).max(0.3);
-                                        }
-                                        if ui.button("+").clicked()
-                                        {
-                                                scale = (scale + 0.1).min(3.0);
-                                        }
-                                        if ui.button("Reset").clicked()
-                                        {
-                                                scale = 1.0;
-                                        }
-                                });
+                                ui.horizontal(ui_def);
                         });
 
                 self.scale(scale);

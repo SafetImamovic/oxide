@@ -1,6 +1,10 @@
 use crate::gui::GuiRenderer;
+use crate::{INDICES, TRIANGLE};
 use egui_wgpu::ScreenDescriptor;
+use image::GenericImageView;
 use std::sync::Arc;
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{BufferDescriptor, Features};
 use winit::dpi::PhysicalSize;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
@@ -122,6 +126,19 @@ pub struct State
 
         /// Handles the GUI.
         pub gui: GuiRenderer,
+
+        /// Handles to GPU-accessible buffers.
+        ///
+        /// Corresponds to WebGPU GPUBuffer.
+        ///
+        /// Reference: <https://gpuweb.github.io/gpuweb/#buffer-interface>
+        pub vertex_buffer: wgpu::Buffer,
+        pub index_buffer: wgpu::Buffer,
+
+        /// Total Index count.
+        pub num_indices: u32,
+
+        pub diffuse_bind_group: wgpu::BindGroup,
 }
 
 impl State
@@ -162,7 +179,7 @@ impl State
         {
                 adapter.request_device(&wgpu::DeviceDescriptor {
                         label: None,
-                        required_features: wgpu::Features::empty(),
+                        required_features: Features::empty(),
                         // WebGL doesn't support all of wgpu's features, so if
                         // we're building for the web we'll have to disable some.
                         // Describes the limit of certain types of resources that we can
@@ -196,6 +213,16 @@ impl State
                 adapter.features()
                         .iter()
                         .for_each(|f| log::info!("FEATURE: {}", f));
+        }
+
+        pub fn log_adapter_info(adapter: &wgpu::Adapter)
+        {
+                log::info!("Adapter Info: {:#?}", adapter.get_info());
+        }
+
+        pub fn log_device_info(device: &wgpu::Device)
+        {
+                log::info!("Device Info: {:#?}", device);
         }
 
         /// Represents different Display-Surface sync modes.
@@ -243,11 +270,14 @@ impl State
                 }
         }
 
-        fn get_render_pipeline_layout(device: &wgpu::Device) -> wgpu::PipelineLayout
+        fn get_render_pipeline_layout(
+                device: &wgpu::Device,
+                bind_group_layout: &wgpu::BindGroupLayout,
+        ) -> wgpu::PipelineLayout
         {
                 device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: Some("Render Pipeline Layout"),
-                        bind_group_layouts: &[],
+                        bind_group_layouts: &[&bind_group_layout],
                         push_constant_ranges: &[],
                 })
         }
@@ -255,11 +285,15 @@ impl State
         fn get_render_pipeline(
                 device: &wgpu::Device,
                 config: &wgpu::SurfaceConfiguration,
+                bind_group_layout: &wgpu::BindGroupLayout,
         ) -> wgpu::RenderPipeline
         {
                 let shader = Self::load_shader_module(device);
 
-                let render_pipeline_layout = Self::get_render_pipeline_layout(device);
+                let render_pipeline_layout =
+                        Self::get_render_pipeline_layout(device, bind_group_layout);
+
+                let vertex_buffer = crate::Vertex::get_desc();
 
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                         label: Some("Render Pipeline"),
@@ -267,7 +301,7 @@ impl State
                         vertex: wgpu::VertexState {
                                 module: &shader,
                                 entry_point: Some("vs_main"), // 1.
-                                buffers: &[],                 // 2.
+                                buffers: &[vertex_buffer],    // 2.
                                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                         },
                         fragment: Some(wgpu::FragmentState {
@@ -329,6 +363,34 @@ impl State
                 log::info!("Current backend: {:?}", backend);
         }
 
+        pub fn new_vertex_buffer<A>(
+                device: &wgpu::Device,
+                content: &[A],
+        ) -> wgpu::Buffer
+        where
+                A: bytemuck::NoUninit,
+        {
+                device.create_buffer_init(&BufferInitDescriptor {
+                        label: Some("Vertex Buffer"),
+                        contents: bytemuck::cast_slice(content),
+                        usage: wgpu::BufferUsages::VERTEX,
+                })
+        }
+
+        pub fn new_index_buffer<A>(
+                device: &wgpu::Device,
+                content: &[A],
+        ) -> wgpu::Buffer
+        where
+                A: bytemuck::NoUninit,
+        {
+                device.create_buffer_init(&BufferInitDescriptor {
+                        label: Some("Index Buffer"),
+                        contents: bytemuck::cast_slice(content),
+                        usage: wgpu::BufferUsages::INDEX,
+                })
+        }
+
         /// Asynchronously creates a new [`State`] instance.
         ///
         /// Initializes rendering resources and prepares the engine
@@ -345,9 +407,13 @@ impl State
 
                 let adapter = Self::get_adapter(&instance, &surface).await?;
 
+                Self::log_adapter_info(&adapter);
+
                 Self::log_current_backend(&adapter);
 
                 let (device, queue) = Self::get_device_and_queue(&adapter).await?;
+
+                Self::log_device_info(&device);
 
                 let surface_caps = surface.get_capabilities(&adapter);
 
@@ -360,11 +426,128 @@ impl State
 
                 let config = Self::get_surface_config(surface_format, &size, &surface_caps);
 
-                let render_pipeline = Self::get_render_pipeline(&device, &config);
+                //-------------------------------------------------------------------------
+                //                             TEXTURES
+                //                           TODO: Refactor
+                //-------------------------------------------------------------------------
+
+                let diffuse_bytes = include_bytes!("tole-tole-cat.png");
+
+                let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
+
+                let diffuse_rgba = diffuse_image.to_rgba8();
+
+                let dimensions = diffuse_image.dimensions();
+
+                let texture_size = wgpu::Extent3d {
+                        width: dimensions.0,
+                        height: dimensions.1,
+                        depth_or_array_layers: 1,
+                };
+
+                let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
+                        size: texture_size,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                        label: Some("diffuse_texture"),
+                        view_formats: &[],
+                });
+
+                queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                                texture: &diffuse_texture,
+                                mip_level: 0,
+                                origin: wgpu::Origin3d::ZERO,
+                                aspect: wgpu::TextureAspect::All,
+                        },
+                        &diffuse_rgba,
+                        wgpu::TexelCopyBufferLayout {
+                                offset: 0,
+                                bytes_per_row: Some(4 * dimensions.0),
+                                rows_per_image: Some(dimensions.1),
+                        },
+                        texture_size,
+                );
+
+                let diffuse_texture_view =
+                        diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+                let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                        address_mode_u: wgpu::AddressMode::ClampToEdge,
+                        address_mode_v: wgpu::AddressMode::ClampToEdge,
+                        address_mode_w: wgpu::AddressMode::ClampToEdge,
+                        mag_filter: wgpu::FilterMode::Linear,
+                        min_filter: wgpu::FilterMode::Nearest,
+                        mipmap_filter: wgpu::FilterMode::Nearest,
+                        ..Default::default()
+                });
+
+                let texture_bind_group_layout =
+                        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                                entries: &[
+                                        wgpu::BindGroupLayoutEntry {
+                                                binding: 0,
+                                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                                ty: wgpu::BindingType::Texture {
+                                                        multisampled: false,
+                                                        view_dimension:
+                                                                wgpu::TextureViewDimension::D2,
+                                                        sample_type:
+                                                                wgpu::TextureSampleType::Float {
+                                                                        filterable: true,
+                                                                },
+                                                },
+                                                count: None,
+                                        },
+                                        wgpu::BindGroupLayoutEntry {
+                                                binding: 1,
+                                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                                // This should match the filterable field of the
+                                                // corresponding Texture entry above.
+                                                ty: wgpu::BindingType::Sampler(
+                                                        wgpu::SamplerBindingType::Filtering,
+                                                ),
+                                                count: None,
+                                        },
+                                ],
+                                label: Some("texture_bind_group_layout"),
+                        });
+
+                let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        layout: &texture_bind_group_layout,
+                        entries: &[
+                                wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: wgpu::BindingResource::TextureView(
+                                                &diffuse_texture_view,
+                                        ),
+                                },
+                                wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+                                },
+                        ],
+                        label: Some("diffuse_bind_group"),
+                });
+
+                //-------------------------------------------------------------------------
+
+                let render_pipeline =
+                        Self::get_render_pipeline(&device, &config, &texture_bind_group_layout);
 
                 let gui = GuiRenderer::new(&device, config.format, None, 1.0, 1, &window);
 
+                let vertex_buffer = Self::new_vertex_buffer(&device, crate::TRIANGLE);
+
+                let index_buffer = Self::new_index_buffer(&device, crate::INDICES);
+
+                let num_indices = crate::INDICES.len() as u32;
+
                 Ok(State {
+                        num_indices,
                         window,
                         gui,
                         render_pipeline,
@@ -373,6 +556,9 @@ impl State
                         queue,
                         config,
                         is_surface_configured: false,
+                        vertex_buffer,
+                        index_buffer,
+                        diffuse_bind_group,
                 })
         }
 
@@ -398,23 +584,6 @@ impl State
                         backends: wgpu::Backends::GL,
                         ..Default::default()
                 })
-        }
-
-        pub fn handle_key(
-                &self,
-                event_loop: &ActiveEventLoop,
-                code: KeyCode,
-                is_pressed: bool,
-        )
-        {
-                log::info!("{:#?}", code);
-
-                if let (KeyCode::Escape, true) = (code, is_pressed)
-                {
-                        log::info!("Oxide Render Engine Exiting. bye!");
-
-                        event_loop.exit()
-                }
         }
 
         /// Handles window resize events.
@@ -488,7 +657,8 @@ impl State
                                         label: Some("Main Render Encoder"),
                                 });
 
-                // 1. First render your background
+                // 1. First render the background
+                // Diabolical levels of indentation.
                 {
                         let mut render_pass =
                                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -500,9 +670,9 @@ impl State
                                                         ops: wgpu::Operations {
                                                                 load: wgpu::LoadOp::Clear(
                                                                         wgpu::Color {
-                                                                                r: 0.1,
-                                                                                g: 0.2,
-                                                                                b: 0.3,
+                                                                                r: 0.0,
+                                                                                g: 0.0,
+                                                                                b: 0.0,
                                                                                 a: 1.0,
                                                                         },
                                                                 ),
@@ -514,8 +684,19 @@ impl State
                                         occlusion_query_set: None,
                                         timestamp_writes: None,
                                 });
+
                         render_pass.set_pipeline(&self.render_pipeline);
-                        render_pass.draw(0..3, 0..1);
+
+                        render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+
+                        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+                        render_pass.set_index_buffer(
+                                self.index_buffer.slice(..),
+                                wgpu::IndexFormat::Uint16,
+                        );
+
+                        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
                 }
 
                 let screen_descriptor = ScreenDescriptor {
@@ -540,6 +721,7 @@ impl State
                 }
 
                 self.queue.submit(std::iter::once(encoder.finish()));
+
                 output.present();
 
                 Ok(())
