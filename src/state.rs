@@ -1,6 +1,9 @@
+use crate::TRIANGLE;
 use crate::gui::GuiRenderer;
 use egui_wgpu::ScreenDescriptor;
 use std::sync::Arc;
+use wgpu::BufferDescriptor;
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use winit::dpi::PhysicalSize;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
@@ -122,6 +125,16 @@ pub struct State
 
         /// Handles the GUI.
         pub gui: GuiRenderer,
+
+        /// Handle to a GPU-accessible buffer.
+        ///
+        /// Corresponds to WebGPU GPUBuffer.
+        ///
+        /// Reference: <https://gpuweb.github.io/gpuweb/#buffer-interface>
+        pub vertex_buffer: wgpu::Buffer,
+
+        /// Total Vertex count.
+        pub num_vertices: u32,
 }
 
 impl State
@@ -261,13 +274,15 @@ impl State
 
                 let render_pipeline_layout = Self::get_render_pipeline_layout(device);
 
+                let vertex_buffer = crate::Vertex::get_desc();
+
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                         label: Some("Render Pipeline"),
                         layout: Some(&render_pipeline_layout),
                         vertex: wgpu::VertexState {
                                 module: &shader,
                                 entry_point: Some("vs_main"), // 1.
-                                buffers: &[],                 // 2.
+                                buffers: &[vertex_buffer],    // 2.
                                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                         },
                         fragment: Some(wgpu::FragmentState {
@@ -329,6 +344,15 @@ impl State
                 log::info!("Current backend: {:?}", backend);
         }
 
+        fn new_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer
+        {
+                device.create_buffer_init(&BufferInitDescriptor {
+                        label: Some("Vertex Buffer"),
+                        contents: bytemuck::cast_slice(crate::TRIANGLE),
+                        usage: wgpu::BufferUsages::VERTEX,
+                })
+        }
+
         /// Asynchronously creates a new [`State`] instance.
         ///
         /// Initializes rendering resources and prepares the engine
@@ -364,7 +388,12 @@ impl State
 
                 let gui = GuiRenderer::new(&device, config.format, None, 1.0, 1, &window);
 
+                let vertex_buffer = Self::new_vertex_buffer(&device);
+
+                let num_vertices = TRIANGLE.len() as u32;
+
                 Ok(State {
+                        num_vertices,
                         window,
                         gui,
                         render_pipeline,
@@ -373,6 +402,7 @@ impl State
                         queue,
                         config,
                         is_surface_configured: false,
+                        vertex_buffer,
                 })
         }
 
@@ -514,8 +544,12 @@ impl State
                                         occlusion_query_set: None,
                                         timestamp_writes: None,
                                 });
+
                         render_pass.set_pipeline(&self.render_pipeline);
-                        render_pass.draw(0..3, 0..1);
+
+                        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+                        render_pass.draw(0..self.num_vertices, 0..1);
                 }
 
                 let screen_descriptor = ScreenDescriptor {
