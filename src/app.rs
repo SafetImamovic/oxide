@@ -128,6 +128,23 @@ impl App
 
                         self.state.as_mut().unwrap().num_indices = crate::SQ_INDICES.len() as u32;
                 }
+
+                if let (KeyCode::Digit3, true) = (code, is_pressed)
+                {
+                        log::info!("Switch to Square!");
+
+                        self.state.as_mut().unwrap().vertex_buffer = State::new_vertex_buffer(
+                                &self.state.as_ref().unwrap().device,
+                                crate::SQUARE_2,
+                        );
+
+                        self.state.as_mut().unwrap().index_buffer = State::new_index_buffer(
+                                &self.state.as_ref().unwrap().device,
+                                crate::SQ_INDICES_2,
+                        );
+
+                        self.state.as_mut().unwrap().num_indices = crate::SQ_INDICES_2.len() as u32;
+                }
         }
 }
 
