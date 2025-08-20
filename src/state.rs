@@ -431,7 +431,7 @@ impl State
                 //                           TODO: Refactor
                 //-------------------------------------------------------------------------
 
-                let diffuse_bytes = include_bytes!("vro.png");
+                let diffuse_bytes = include_bytes!("tole-tole-cat.png");
 
                 let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
 
@@ -658,6 +658,7 @@ impl State
                                 });
 
                 // 1. First render the background
+                // Diabolical levels of indentation.
                 {
                         let mut render_pass =
                                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -669,9 +670,9 @@ impl State
                                                         ops: wgpu::Operations {
                                                                 load: wgpu::LoadOp::Clear(
                                                                         wgpu::Color {
-                                                                                r: 0.1,
-                                                                                g: 0.2,
-                                                                                b: 0.3,
+                                                                                r: 0.0,
+                                                                                g: 0.0,
+                                                                                b: 0.0,
                                                                                 a: 1.0,
                                                                         },
                                                                 ),
