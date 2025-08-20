@@ -2,8 +2,8 @@ use crate::gui::GuiRenderer;
 use crate::{INDICES, TRIANGLE};
 use egui_wgpu::ScreenDescriptor;
 use std::sync::Arc;
-use wgpu::BufferDescriptor;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{BufferDescriptor, Features};
 use winit::dpi::PhysicalSize;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
@@ -176,7 +176,7 @@ impl State
         {
                 adapter.request_device(&wgpu::DeviceDescriptor {
                         label: None,
-                        required_features: wgpu::Features::empty(),
+                        required_features: Features::POLYGON_MODE_LINE,
                         // WebGL doesn't support all of wgpu's features, so if
                         // we're building for the web we'll have to disable some.
                         // Describes the limit of certain types of resources that we can
@@ -345,20 +345,30 @@ impl State
                 log::info!("Current backend: {:?}", backend);
         }
 
-        fn new_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer
+        pub fn new_vertex_buffer<A>(
+                device: &wgpu::Device,
+                content: &[A],
+        ) -> wgpu::Buffer
+        where
+                A: bytemuck::NoUninit,
         {
                 device.create_buffer_init(&BufferInitDescriptor {
                         label: Some("Vertex Buffer"),
-                        contents: bytemuck::cast_slice(crate::TRIANGLE),
+                        contents: bytemuck::cast_slice(content),
                         usage: wgpu::BufferUsages::VERTEX,
                 })
         }
 
-        fn new_index_buffer(device: &wgpu::Device) -> wgpu::Buffer
+        pub fn new_index_buffer<A>(
+                device: &wgpu::Device,
+                content: &[A],
+        ) -> wgpu::Buffer
+        where
+                A: bytemuck::NoUninit,
         {
                 device.create_buffer_init(&BufferInitDescriptor {
                         label: Some("Index Buffer"),
-                        contents: bytemuck::cast_slice(crate::INDICES),
+                        contents: bytemuck::cast_slice(content),
                         usage: wgpu::BufferUsages::INDEX,
                 })
         }
@@ -398,11 +408,11 @@ impl State
 
                 let gui = GuiRenderer::new(&device, config.format, None, 1.0, 1, &window);
 
-                let vertex_buffer = Self::new_vertex_buffer(&device);
+                let vertex_buffer = Self::new_vertex_buffer(&device, crate::TRIANGLE);
 
-                let index_buffer = Self::new_index_buffer(&device);
+                let index_buffer = Self::new_index_buffer(&device, crate::INDICES);
 
-                let num_indices = INDICES.len() as u32;
+                let num_indices = crate::INDICES.len() as u32;
 
                 Ok(State {
                         num_indices,
@@ -441,23 +451,6 @@ impl State
                         backends: wgpu::Backends::GL,
                         ..Default::default()
                 })
-        }
-
-        pub fn handle_key(
-                &self,
-                event_loop: &ActiveEventLoop,
-                code: KeyCode,
-                is_pressed: bool,
-        )
-        {
-                log::info!("{:#?}", code);
-
-                if let (KeyCode::Escape, true) = (code, is_pressed)
-                {
-                        log::info!("Oxide Render Engine Exiting. bye!");
-
-                        event_loop.exit()
-                }
         }
 
         /// Handles window resize events.
@@ -531,7 +524,7 @@ impl State
                                         label: Some("Main Render Encoder"),
                                 });
 
-                // 1. First render your background
+                // 1. First render the background
                 {
                         let mut render_pass =
                                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

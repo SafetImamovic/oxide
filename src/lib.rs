@@ -148,6 +148,27 @@ const TRIANGLE: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
+const SQUARE: &[Vertex] = &[
+        Vertex {
+                position: [-0.5, 0.5, 0.0],
+                color: [1.0, 1.0, 0.0],
+        }, // A
+        Vertex {
+                position: [-0.5, -0.5, 0.0],
+                color: [0.0, 1.0, 1.0],
+        }, // B
+        Vertex {
+                position: [0.5, -0.5, 0.0],
+                color: [0.1, 0.0, 0.1],
+        }, // C
+        Vertex {
+                position: [0.5, 0.5, 0.0],
+                color: [0.5, 1.0, 0.5],
+        }, // D
+];
+
+const SQ_INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
+
 impl Vertex
 {
         pub fn get_desc() -> wgpu::VertexBufferLayout<'static>

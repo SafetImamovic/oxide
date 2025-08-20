@@ -9,7 +9,7 @@ use winit::{
         application::ApplicationHandler,
         event::{KeyEvent, MouseButton, WindowEvent},
         event_loop::ActiveEventLoop,
-        keyboard::PhysicalKey,
+        keyboard::{KeyCode, PhysicalKey},
         window::Window,
 };
 
@@ -76,6 +76,57 @@ impl App
                 {
                         let size = state.window.inner_size();
                         state.resize(size.width, size.height);
+                }
+        }
+
+        pub fn handle_key(
+                &mut self,
+                event_loop: &ActiveEventLoop,
+                code: KeyCode,
+                is_pressed: bool,
+        )
+        {
+                log::info!("{:#?}", code);
+
+                if let (KeyCode::Escape, true) = (code, is_pressed)
+                {
+                        log::info!("Oxide Render Engine Exiting. bye!");
+
+                        event_loop.exit()
+                }
+
+                if let (KeyCode::Digit1, true) = (code, is_pressed)
+                {
+                        log::info!("Switch to Pentagon!");
+
+                        self.state.as_mut().unwrap().vertex_buffer = State::new_vertex_buffer(
+                                &self.state.as_ref().unwrap().device,
+                                crate::TRIANGLE,
+                        );
+
+                        self.state.as_mut().unwrap().index_buffer = State::new_index_buffer(
+                                &self.state.as_ref().unwrap().device,
+                                crate::INDICES,
+                        );
+
+                        self.state.as_mut().unwrap().num_indices = crate::INDICES.len() as u32;
+                }
+
+                if let (KeyCode::Digit2, true) = (code, is_pressed)
+                {
+                        log::info!("Switch to Square!");
+
+                        self.state.as_mut().unwrap().vertex_buffer = State::new_vertex_buffer(
+                                &self.state.as_ref().unwrap().device,
+                                crate::SQUARE,
+                        );
+
+                        self.state.as_mut().unwrap().index_buffer = State::new_index_buffer(
+                                &self.state.as_ref().unwrap().device,
+                                crate::SQ_INDICES,
+                        );
+
+                        self.state.as_mut().unwrap().num_indices = crate::SQ_INDICES.len() as u32;
                 }
         }
 }
@@ -220,7 +271,7 @@ impl ApplicationHandler<State> for App
                                                 ..
                                         },
                                 ..
-                        } => state.handle_key(event_loop, code, key_state.is_pressed()),
+                        } => self.handle_key(event_loop, code, key_state.is_pressed()),
 
                         _ =>
                         {}
