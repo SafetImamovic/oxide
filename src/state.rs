@@ -1,5 +1,5 @@
-use crate::TRIANGLE;
 use crate::gui::GuiRenderer;
+use crate::{INDICES, TRIANGLE};
 use egui_wgpu::ScreenDescriptor;
 use std::sync::Arc;
 use wgpu::BufferDescriptor;
@@ -126,15 +126,16 @@ pub struct State
         /// Handles the GUI.
         pub gui: GuiRenderer,
 
-        /// Handle to a GPU-accessible buffer.
+        /// Handles to GPU-accessible buffers.
         ///
         /// Corresponds to WebGPU GPUBuffer.
         ///
         /// Reference: <https://gpuweb.github.io/gpuweb/#buffer-interface>
         pub vertex_buffer: wgpu::Buffer,
+        pub index_buffer: wgpu::Buffer,
 
-        /// Total Vertex count.
-        pub num_vertices: u32,
+        /// Total Index count.
+        pub num_indices: u32,
 }
 
 impl State
@@ -353,6 +354,15 @@ impl State
                 })
         }
 
+        fn new_index_buffer(device: &wgpu::Device) -> wgpu::Buffer
+        {
+                device.create_buffer_init(&BufferInitDescriptor {
+                        label: Some("Index Buffer"),
+                        contents: bytemuck::cast_slice(crate::INDICES),
+                        usage: wgpu::BufferUsages::INDEX,
+                })
+        }
+
         /// Asynchronously creates a new [`State`] instance.
         ///
         /// Initializes rendering resources and prepares the engine
@@ -390,10 +400,12 @@ impl State
 
                 let vertex_buffer = Self::new_vertex_buffer(&device);
 
-                let num_vertices = TRIANGLE.len() as u32;
+                let index_buffer = Self::new_index_buffer(&device);
+
+                let num_indices = INDICES.len() as u32;
 
                 Ok(State {
-                        num_vertices,
+                        num_indices,
                         window,
                         gui,
                         render_pipeline,
@@ -403,6 +415,7 @@ impl State
                         config,
                         is_surface_configured: false,
                         vertex_buffer,
+                        index_buffer,
                 })
         }
 
@@ -549,7 +562,12 @@ impl State
 
                         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
-                        render_pass.draw(0..self.num_vertices, 0..1);
+                        render_pass.set_index_buffer(
+                                self.index_buffer.slice(..),
+                                wgpu::IndexFormat::Uint16,
+                        );
+
+                        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
                 }
 
                 let screen_descriptor = ScreenDescriptor {
@@ -574,6 +592,7 @@ impl State
                 }
 
                 self.queue.submit(std::iter::once(encoder.finish()));
+
                 output.present();
 
                 Ok(())
