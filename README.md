@@ -34,14 +34,18 @@ oxide/
 ### **1. Clone the repository**
 
 ```bash
-$ git clone https://github.com/SafetImamovic/oxide.git
-$ cd oxide
+git clone https://github.com/SafetImamovic/oxide.git
+cd oxide
 ```
+
+---
 
 ### **2. Run natively**
 
+Enable info-level logging and run:
+
 ```bash
-$ cargo run
+RUST_LOG=info cargo run
 ```
 
 This launches the engine in a native window using `winit`.
@@ -50,8 +54,11 @@ This launches the engine in a native window using `winit`.
 
 ### **3. Build for WebAssembly**
 
+When targeting browsers, randomness support must be configured explicitly for `getrandom`.
+Use the following command to build:
+
 ```bash
-$ wasm-pack build --target web
+RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web --no-default-features
 ```
 
 This generates the `pkg/` folder containing the `.wasm` and JS bindings.
@@ -62,12 +69,11 @@ This generates the `pkg/` folder containing the `.wasm` and JS bindings.
 
 To bypass CORS restrictions when testing in the browser:
 
-From root:
 ```bash
-$ python -m http.server 8080
+python -m http.server 8080
 ```
 
-Open [http://localhost:8080/static/](http://localhost:8080/static/) in your browser.
+Then open [http://localhost:8080/static/](http://localhost:8080/static/) in your browser.
 
 ---
 
@@ -105,4 +111,5 @@ Open [http://localhost:8080/static/](http://localhost:8080/static/) in your brow
 ## 📄 License
 
 TODO!
+
 
