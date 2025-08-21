@@ -13,7 +13,11 @@ use winit::{
         window::Window,
 };
 
-use crate::{config::Config, state::State};
+use crate::{
+        config::Config,
+        geometry::vertex::{INDICES, SQ_INDICES, SQ_INDICES_2, SQUARE, SQUARE_2, TRIANGLE},
+        state::State,
+};
 
 /// Main application struct.
 ///
@@ -101,15 +105,15 @@ impl App
 
                         self.state.as_mut().unwrap().vertex_buffer = State::new_vertex_buffer(
                                 &self.state.as_ref().unwrap().device,
-                                crate::TRIANGLE,
+                                TRIANGLE,
                         );
 
                         self.state.as_mut().unwrap().index_buffer = State::new_index_buffer(
                                 &self.state.as_ref().unwrap().device,
-                                crate::INDICES,
+                                INDICES,
                         );
 
-                        self.state.as_mut().unwrap().num_indices = crate::INDICES.len() as u32;
+                        self.state.as_mut().unwrap().num_indices = INDICES.len() as u32;
                 }
 
                 if let (KeyCode::Digit2, true) = (code, is_pressed)
@@ -118,15 +122,15 @@ impl App
 
                         self.state.as_mut().unwrap().vertex_buffer = State::new_vertex_buffer(
                                 &self.state.as_ref().unwrap().device,
-                                crate::SQUARE,
+                                SQUARE,
                         );
 
                         self.state.as_mut().unwrap().index_buffer = State::new_index_buffer(
                                 &self.state.as_ref().unwrap().device,
-                                crate::SQ_INDICES,
+                                SQ_INDICES,
                         );
 
-                        self.state.as_mut().unwrap().num_indices = crate::SQ_INDICES.len() as u32;
+                        self.state.as_mut().unwrap().num_indices = SQ_INDICES.len() as u32;
                 }
 
                 if let (KeyCode::Digit3, true) = (code, is_pressed)
@@ -135,15 +139,15 @@ impl App
 
                         self.state.as_mut().unwrap().vertex_buffer = State::new_vertex_buffer(
                                 &self.state.as_ref().unwrap().device,
-                                crate::SQUARE_2,
+                                SQUARE_2,
                         );
 
                         self.state.as_mut().unwrap().index_buffer = State::new_index_buffer(
                                 &self.state.as_ref().unwrap().device,
-                                crate::SQ_INDICES_2,
+                                SQ_INDICES_2,
                         );
 
-                        self.state.as_mut().unwrap().num_indices = crate::SQ_INDICES_2.len() as u32;
+                        self.state.as_mut().unwrap().num_indices = SQ_INDICES_2.len() as u32;
                 }
         }
 }

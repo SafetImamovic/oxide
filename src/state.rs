@@ -1,13 +1,11 @@
+use crate::geometry::vertex::{INDICES, TRIANGLE, Vertex};
 use crate::gui::GuiRenderer;
-use crate::{INDICES, TRIANGLE};
 use egui_wgpu::ScreenDescriptor;
 use image::GenericImageView;
 use std::sync::Arc;
+use wgpu::Features;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{BufferDescriptor, Features};
 use winit::dpi::PhysicalSize;
-use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 /// Represents the rendering state of the application.
@@ -293,7 +291,7 @@ impl State
                 let render_pipeline_layout =
                         Self::get_render_pipeline_layout(device, bind_group_layout);
 
-                let vertex_buffer = crate::Vertex::get_desc();
+                let vertex_buffer = Vertex::get_desc();
 
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                         label: Some("Render Pipeline"),
@@ -412,8 +410,6 @@ impl State
                 Self::log_current_backend(&adapter);
 
                 let (device, queue) = Self::get_device_and_queue(&adapter).await?;
-
-                Self::log_device_info(&device);
 
                 let surface_caps = surface.get_capabilities(&adapter);
 
@@ -540,11 +536,11 @@ impl State
 
                 let gui = GuiRenderer::new(&device, config.format, None, 1.0, 1, &window);
 
-                let vertex_buffer = Self::new_vertex_buffer(&device, crate::TRIANGLE);
+                let vertex_buffer = Self::new_vertex_buffer(&device, TRIANGLE);
 
-                let index_buffer = Self::new_index_buffer(&device, crate::INDICES);
+                let index_buffer = Self::new_index_buffer(&device, INDICES);
 
-                let num_indices = crate::INDICES.len() as u32;
+                let num_indices = INDICES.len() as u32;
 
                 Ok(State {
                         num_indices,
