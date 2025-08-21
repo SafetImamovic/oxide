@@ -3,6 +3,7 @@ pub mod config;
 pub mod geometry;
 pub mod gui;
 pub mod state;
+pub mod texture;
 pub mod utils;
 
 /// WebAssembly (WASM) architecture note:
@@ -113,5 +114,3 @@ pub fn get_body_size() -> Option<(u32, u32)>
 
         Some((width, height))
 }
-
-
