@@ -1,8 +1,10 @@
 pub mod app;
+pub mod camera;
 pub mod config;
 pub mod geometry;
 pub mod gui;
 pub mod state;
+pub mod texture;
 pub mod utils;
 
 /// WebAssembly (WASM) architecture note:
@@ -38,28 +40,13 @@ use winit::event_loop::EventLoop;
 /// Starts the application in native or WASM environments.
 pub fn run() -> anyhow::Result<()>
 {
-        log::info!("Oxide initialized.");
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-                env_logger::init();
-
-                log::info!("Running on native.");
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-                console_log::init_with_level(log::Level::Info).unwrap_throw();
-
-                log::info!("Running on wasm32.");
-        }
+        crate::utils::bootstrap::config_logging();
 
         let event_loop = EventLoop::with_user_event().build()?;
 
-        let config = Config::from_file().unwrap_or_else(|err| {
-                log::warn!("Failed to load config: {err}, falling back to default");
-                Config::default()
-        });
+        let mut config = crate::utils::bootstrap::create_config();
+
+        crate::utils::bootstrap::show_start_message(&config);
 
         #[allow(unused_mut)]
         let mut app = App::new(
@@ -69,14 +56,20 @@ pub fn run() -> anyhow::Result<()>
         );
 
         #[cfg(target_arch = "wasm32")]
-        event_loop.spawn_app(Box::leak(Box::new(app)));
+        {
+                let mut app = Box::leak(Box::new(app));
+
+                event_loop.spawn_app(app);
+        }
 
         #[cfg(not(target_arch = "wasm32"))]
         event_loop.run_app(&mut app)?;
 
-        let msg = get_exit_message();
-
-        log::info!("{msg}");
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+                let msg = get_exit_message(&app.config);
+                log::info!("{msg}");
+        }
 
         Ok(())
 }
@@ -113,5 +106,3 @@ pub fn get_body_size() -> Option<(u32, u32)>
 
         Some((width, height))
 }
-
-

@@ -1,4 +1,8 @@
 default_canvas_width = 1280 
 default_canvas_height = 720 
-
+window_width = 1280
+window_height = 720
+show_start_message = true 
+show_exit_message = true 
+gui_scale = 2.0
 

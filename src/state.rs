@@ -1,5 +1,6 @@
 use crate::geometry::vertex::{INDICES, TRIANGLE, Vertex};
 use crate::gui::GuiRenderer;
+use crate::texture::Texture;
 use egui_wgpu::ScreenDescriptor;
 use image::GenericImageView;
 use std::sync::Arc;
@@ -137,6 +138,18 @@ pub struct State
         pub num_indices: u32,
 
         pub diffuse_bind_group: wgpu::BindGroup,
+
+        pub diffuse_texture: crate::texture::Texture,
+
+        pub camera: crate::camera::Camera,
+
+        pub camera_uniform: crate::camera::CameraUniform,
+
+        pub camera_buffer: wgpu::Buffer,
+
+        pub camera_bind_group: wgpu::BindGroup,
+
+        pub camera_controller: crate::camera::Controller,
 }
 
 impl State
@@ -271,11 +284,12 @@ impl State
         fn get_render_pipeline_layout(
                 device: &wgpu::Device,
                 bind_group_layout: &wgpu::BindGroupLayout,
+                camera_bind_group_layout: &wgpu::BindGroupLayout,
         ) -> wgpu::PipelineLayout
         {
                 device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: Some("Render Pipeline Layout"),
-                        bind_group_layouts: &[&bind_group_layout],
+                        bind_group_layouts: &[&bind_group_layout, &camera_bind_group_layout],
                         push_constant_ranges: &[],
                 })
         }
@@ -284,12 +298,16 @@ impl State
                 device: &wgpu::Device,
                 config: &wgpu::SurfaceConfiguration,
                 bind_group_layout: &wgpu::BindGroupLayout,
+                camera_bind_group_layout: &wgpu::BindGroupLayout,
         ) -> wgpu::RenderPipeline
         {
                 let shader = Self::load_shader_module(device);
 
-                let render_pipeline_layout =
-                        Self::get_render_pipeline_layout(device, bind_group_layout);
+                let render_pipeline_layout = Self::get_render_pipeline_layout(
+                        device,
+                        bind_group_layout,
+                        camera_bind_group_layout,
+                );
 
                 let vertex_buffer = Vertex::get_desc();
 
@@ -422,117 +440,17 @@ impl State
 
                 let config = Self::get_surface_config(surface_format, &size, &surface_caps);
 
-                //-------------------------------------------------------------------------
-                //                             TEXTURES
-                //                           TODO: Refactor
-                //-------------------------------------------------------------------------
-
-                let diffuse_bytes = include_bytes!("tole-tole-cat.png");
-
-                let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
-
-                let diffuse_rgba = diffuse_image.to_rgba8();
-
-                let dimensions = diffuse_image.dimensions();
-
-                let texture_size = wgpu::Extent3d {
-                        width: dimensions.0,
-                        height: dimensions.1,
-                        depth_or_array_layers: 1,
-                };
-
-                let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
-                        size: texture_size,
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                        label: Some("diffuse_texture"),
-                        view_formats: &[],
-                });
-
-                queue.write_texture(
-                        wgpu::TexelCopyTextureInfo {
-                                texture: &diffuse_texture,
-                                mip_level: 0,
-                                origin: wgpu::Origin3d::ZERO,
-                                aspect: wgpu::TextureAspect::All,
-                        },
-                        &diffuse_rgba,
-                        wgpu::TexelCopyBufferLayout {
-                                offset: 0,
-                                bytes_per_row: Some(4 * dimensions.0),
-                                rows_per_image: Some(dimensions.1),
-                        },
-                        texture_size,
-                );
-
-                let diffuse_texture_view =
-                        diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-                let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-                        address_mode_u: wgpu::AddressMode::ClampToEdge,
-                        address_mode_v: wgpu::AddressMode::ClampToEdge,
-                        address_mode_w: wgpu::AddressMode::ClampToEdge,
-                        mag_filter: wgpu::FilterMode::Linear,
-                        min_filter: wgpu::FilterMode::Nearest,
-                        mipmap_filter: wgpu::FilterMode::Nearest,
-                        ..Default::default()
-                });
+                let diffuse_texture =
+                        crate::texture::Texture::from_bytes(&device, &queue, "Texture")?;
 
                 let texture_bind_group_layout =
-                        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                                entries: &[
-                                        wgpu::BindGroupLayoutEntry {
-                                                binding: 0,
-                                                visibility: wgpu::ShaderStages::FRAGMENT,
-                                                ty: wgpu::BindingType::Texture {
-                                                        multisampled: false,
-                                                        view_dimension:
-                                                                wgpu::TextureViewDimension::D2,
-                                                        sample_type:
-                                                                wgpu::TextureSampleType::Float {
-                                                                        filterable: true,
-                                                                },
-                                                },
-                                                count: None,
-                                        },
-                                        wgpu::BindGroupLayoutEntry {
-                                                binding: 1,
-                                                visibility: wgpu::ShaderStages::FRAGMENT,
-                                                // This should match the filterable field of the
-                                                // corresponding Texture entry above.
-                                                ty: wgpu::BindingType::Sampler(
-                                                        wgpu::SamplerBindingType::Filtering,
-                                                ),
-                                                count: None,
-                                        },
-                                ],
-                                label: Some("texture_bind_group_layout"),
-                        });
+                        crate::texture::Texture::new_texture_bind_group_layout(&device);
 
-                let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                        layout: &texture_bind_group_layout,
-                        entries: &[
-                                wgpu::BindGroupEntry {
-                                        binding: 0,
-                                        resource: wgpu::BindingResource::TextureView(
-                                                &diffuse_texture_view,
-                                        ),
-                                },
-                                wgpu::BindGroupEntry {
-                                        binding: 1,
-                                        resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
-                                },
-                        ],
-                        label: Some("diffuse_bind_group"),
-                });
-
-                //-------------------------------------------------------------------------
-
-                let render_pipeline =
-                        Self::get_render_pipeline(&device, &config, &texture_bind_group_layout);
+                let diffuse_bind_group = crate::texture::Texture::new_diffuse_bind_group(
+                        &device,
+                        &texture_bind_group_layout,
+                        &diffuse_texture,
+                );
 
                 let gui = GuiRenderer::new(&device, config.format, None, 1.0, 1, &window);
 
@@ -542,7 +460,44 @@ impl State
 
                 let num_indices = INDICES.len() as u32;
 
+                let camera = crate::camera::Camera {
+                        eye: (0.0, 1.0, 2.0).into(),
+                        target: (0.4, 0.0, 0.3).into(),
+                        up: cgmath::Vector3::unit_y(),
+                        aspect: 1.0,
+                        fovy: 45.0,
+                        znear: 0.1,
+                        zfar: 100.0,
+                };
+
+                let mut camera_uniform = crate::camera::CameraUniform::new();
+
+                camera_uniform.update_view_proj(&camera);
+
+                let camera_buffer = camera_uniform.new_buffer(&device);
+
+                let camera_bind_group_layout =
+                        crate::camera::CameraUniform::new_bind_group_layout(&device);
+
+                let camera_bind_group = crate::camera::CameraUniform::new_bind_group(
+                        &device,
+                        &camera_bind_group_layout,
+                        &camera_buffer,
+                );
+
+                let camera_controller = crate::camera::Controller::new(0.01);
+
+                let render_pipeline = Self::get_render_pipeline(
+                        &device,
+                        &config,
+                        &texture_bind_group_layout,
+                        &camera_bind_group_layout,
+                );
+
                 Ok(State {
+                        camera,
+                        camera_controller,
+                        diffuse_texture,
                         num_indices,
                         window,
                         gui,
@@ -555,6 +510,9 @@ impl State
                         vertex_buffer,
                         index_buffer,
                         diffuse_bind_group,
+                        camera_uniform,
+                        camera_buffer,
+                        camera_bind_group,
                 })
         }
 
@@ -616,7 +574,10 @@ impl State
         ///
         /// This method triggers a `RedrawRequested` event on the window,
         /// allowing the render loop to run again.
-        pub fn render(&mut self) -> Result<(), wgpu::SurfaceError>
+        pub fn render(
+                &mut self,
+                config: &mut crate::Config,
+        ) -> Result<(), wgpu::SurfaceError>
         {
                 // Request redraw first
                 self.window.request_redraw();
@@ -685,6 +646,8 @@ impl State
 
                         render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
 
+                        render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+
                         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
                         render_pass.set_index_buffer(
@@ -698,13 +661,13 @@ impl State
                 let screen_descriptor = ScreenDescriptor {
                         size_in_pixels: [self.config.width, self.config.height],
                         pixels_per_point: self.window.as_ref().scale_factor() as f32
-                                * self.gui.scale_factor,
+                                * config.gui_scale,
                 };
 
                 {
                         self.gui.begin_frame(&self.window.clone());
 
-                        self.gui.render();
+                        self.gui.render(config);
 
                         self.gui.end_frame_and_draw(
                                 &self.device,
@@ -721,5 +684,20 @@ impl State
                 output.present();
 
                 Ok(())
+        }
+
+        pub fn update(&mut self)
+        {
+                self.camera_controller.update_camera(&mut self.camera);
+
+                self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+
+                self.camera_uniform.update_view_proj(&self.camera);
+
+                self.queue.write_buffer(
+                        &self.camera_buffer,
+                        0,
+                        bytemuck::cast_slice(&[self.camera_uniform]),
+                );
         }
 }
