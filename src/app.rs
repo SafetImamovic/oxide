@@ -149,6 +149,14 @@ impl App
 
                         self.state.as_mut().unwrap().num_indices = SQ_INDICES_2.len() as u32;
                 }
+
+                if let (KeyCode::Tab, true) = (code, is_pressed)
+                {
+                        if let Some(state) = self.state.as_mut()
+                        {
+                                state.gui.show_right_panel = !state.gui.show_right_panel;
+                        }
+                }
         }
 }
 

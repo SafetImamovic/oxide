@@ -1,5 +1,4 @@
 use egui::Context;
-use egui::Ui;
 use egui_wgpu::Renderer;
 use egui_wgpu::ScreenDescriptor;
 use egui_winit::State;
@@ -12,12 +11,11 @@ use wgpu::TextureView;
 use winit::event::WindowEvent;
 use winit::window::Window;
 
-use crate::Config;
-
 pub struct GuiRenderer
 {
         state: State,
         renderer: Renderer,
+        pub show_right_panel: bool,
         frame_started: bool,
 }
 
@@ -55,6 +53,7 @@ impl GuiRenderer
                 );
 
                 GuiRenderer {
+                        show_right_panel: true,
                         state: egui_state,
                         renderer: egui_renderer,
                         frame_started: false,
@@ -163,22 +162,24 @@ impl GuiRenderer
         {
                 let mut scale: f32 = config.gui_scale;
 
-                let ui_def = |ui: &mut Ui| {
-                        ui.label(format!("Scale: {:.1}", scale));
-                        if ui.button("-").clicked()
-                        {
-                                scale = (scale - 0.1).max(0.3);
-                        }
-                        if ui.button("+").clicked()
-                        {
-                                scale = (scale + 0.1).min(3.0);
-                        }
-                        if ui.button("Reset").clicked()
-                        {
-                                scale = 1.0;
-                        }
-                };
+                let ctx = self.context().clone();
 
+                egui::Area::new("nice".into())
+                        .fixed_pos(egui::pos2(10.0, 10.0))
+                        .show(&ctx, |ui| {
+                                ui.label("Press [Tab] to toggle right menu");
+                        });
+
+                if self.show_right_panel
+                {
+                        egui::SidePanel::right("right_panel")
+                                .default_width(300.0)
+                                .show(self.context(), |ui| {
+                                        ui.label("Docked content");
+                                });
+                }
+
+                /*
                 egui::Window::new("Oxide Debug Window")
                         .resizable(true)
                         .vscroll(true)
@@ -186,6 +187,7 @@ impl GuiRenderer
                         .show(self.context(), |ui| {
                                 ui.horizontal(ui_def);
                         });
+                */
 
                 config.gui_scale = scale;
         }
