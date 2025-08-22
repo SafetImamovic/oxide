@@ -25,10 +25,31 @@
   </head>
 
   <body>
+    <pre
+      style="
+        font-family: monospace;
+        background-color: #1e1e1e;
+        color: #d4d4d4;
+        padding: 1em;
+        border-radius: 8px;
+        overflow-x: auto;
+      "
+    >
+   ░██████   ░██    ░██ ░██████░███████   ░██████████ 
+  ░██   ░██   ░██  ░██    ░██  ░██   ░██  ░██         
+ ░██     ░██   ░██░██     ░██  ░██    ░██ ░██         
+ ░██     ░██    ░███      ░██  ░██    ░██ ░█████████  
+ ░██     ░██   ░██░██     ░██  ░██    ░██ ░██         
+  ░██   ░██   ░██  ░██    ░██  ░██   ░██  ░██         
+   ░██████   ░██    ░██ ░██████░███████   ░██████████
+  
+ WASD + QE for down/up</pre
+    >
+
     <canvas id="canvas"></canvas>
 
     <script type="module">
-      import init from "../pkg/oxide.js";
+      import init from "./oxide.js";
 
       init()
         .then(() => {

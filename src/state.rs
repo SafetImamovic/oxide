@@ -142,6 +142,14 @@ pub struct State
         pub diffuse_texture: crate::texture::Texture,
 
         pub camera: crate::camera::Camera,
+
+        pub camera_uniform: crate::camera::CameraUniform,
+
+        pub camera_buffer: wgpu::Buffer,
+
+        pub camera_bind_group: wgpu::BindGroup,
+
+        pub camera_controller: crate::camera::Controller,
 }
 
 impl State
@@ -276,11 +284,12 @@ impl State
         fn get_render_pipeline_layout(
                 device: &wgpu::Device,
                 bind_group_layout: &wgpu::BindGroupLayout,
+                camera_bind_group_layout: &wgpu::BindGroupLayout,
         ) -> wgpu::PipelineLayout
         {
                 device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: Some("Render Pipeline Layout"),
-                        bind_group_layouts: &[&bind_group_layout],
+                        bind_group_layouts: &[&bind_group_layout, &camera_bind_group_layout],
                         push_constant_ranges: &[],
                 })
         }
@@ -289,12 +298,16 @@ impl State
                 device: &wgpu::Device,
                 config: &wgpu::SurfaceConfiguration,
                 bind_group_layout: &wgpu::BindGroupLayout,
+                camera_bind_group_layout: &wgpu::BindGroupLayout,
         ) -> wgpu::RenderPipeline
         {
                 let shader = Self::load_shader_module(device);
 
-                let render_pipeline_layout =
-                        Self::get_render_pipeline_layout(device, bind_group_layout);
+                let render_pipeline_layout = Self::get_render_pipeline_layout(
+                        device,
+                        bind_group_layout,
+                        camera_bind_group_layout,
+                );
 
                 let vertex_buffer = Vertex::get_desc();
 
@@ -439,9 +452,6 @@ impl State
                         &diffuse_texture,
                 );
 
-                let render_pipeline =
-                        Self::get_render_pipeline(&device, &config, &texture_bind_group_layout);
-
                 let gui = GuiRenderer::new(&device, config.format, None, 1.0, 1, &window);
 
                 let vertex_buffer = Self::new_vertex_buffer(&device, TRIANGLE);
@@ -452,16 +462,41 @@ impl State
 
                 let camera = crate::camera::Camera {
                         eye: (0.0, 1.0, 2.0).into(),
-                        target: (0.0, 0.0, 0.0).into(),
+                        target: (0.4, 0.0, 0.3).into(),
                         up: cgmath::Vector3::unit_y(),
-                        aspect: config.width as f32 / config.height as f32,
+                        aspect: 1.0,
                         fovy: 45.0,
                         znear: 0.1,
                         zfar: 100.0,
                 };
 
+                let mut camera_uniform = crate::camera::CameraUniform::new();
+
+                camera_uniform.update_view_proj(&camera);
+
+                let camera_buffer = camera_uniform.new_buffer(&device);
+
+                let camera_bind_group_layout =
+                        crate::camera::CameraUniform::new_bind_group_layout(&device);
+
+                let camera_bind_group = crate::camera::CameraUniform::new_bind_group(
+                        &device,
+                        &camera_bind_group_layout,
+                        &camera_buffer,
+                );
+
+                let camera_controller = crate::camera::Controller::new(0.01);
+
+                let render_pipeline = Self::get_render_pipeline(
+                        &device,
+                        &config,
+                        &texture_bind_group_layout,
+                        &camera_bind_group_layout,
+                );
+
                 Ok(State {
                         camera,
+                        camera_controller,
                         diffuse_texture,
                         num_indices,
                         window,
@@ -475,6 +510,9 @@ impl State
                         vertex_buffer,
                         index_buffer,
                         diffuse_bind_group,
+                        camera_uniform,
+                        camera_buffer,
+                        camera_bind_group,
                 })
         }
 
@@ -608,6 +646,8 @@ impl State
 
                         render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
 
+                        render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+
                         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
                         render_pass.set_index_buffer(
@@ -644,5 +684,20 @@ impl State
                 output.present();
 
                 Ok(())
+        }
+
+        pub fn update(&mut self)
+        {
+                self.camera_controller.update_camera(&mut self.camera);
+
+                self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+
+                self.camera_uniform.update_view_proj(&self.camera);
+
+                self.queue.write_buffer(
+                        &self.camera_buffer,
+                        0,
+                        bytemuck::cast_slice(&[self.camera_uniform]),
+                );
         }
 }
