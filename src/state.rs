@@ -140,6 +140,8 @@ pub struct State
         pub diffuse_bind_group: wgpu::BindGroup,
 
         pub diffuse_texture: crate::texture::Texture,
+
+        pub camera: crate::camera::Camera,
 }
 
 impl State
@@ -448,7 +450,18 @@ impl State
 
                 let num_indices = INDICES.len() as u32;
 
+                let camera = crate::camera::Camera {
+                        eye: (0.0, 1.0, 2.0).into(),
+                        target: (0.0, 0.0, 0.0).into(),
+                        up: cgmath::Vector3::unit_y(),
+                        aspect: config.width as f32 / config.height as f32,
+                        fovy: 45.0,
+                        znear: 0.1,
+                        zfar: 100.0,
+                };
+
                 Ok(State {
+                        camera,
                         diffuse_texture,
                         num_indices,
                         window,
@@ -523,7 +536,10 @@ impl State
         ///
         /// This method triggers a `RedrawRequested` event on the window,
         /// allowing the render loop to run again.
-        pub fn render(&mut self) -> Result<(), wgpu::SurfaceError>
+        pub fn render(
+                &mut self,
+                config: &mut crate::Config,
+        ) -> Result<(), wgpu::SurfaceError>
         {
                 // Request redraw first
                 self.window.request_redraw();
@@ -605,13 +621,13 @@ impl State
                 let screen_descriptor = ScreenDescriptor {
                         size_in_pixels: [self.config.width, self.config.height],
                         pixels_per_point: self.window.as_ref().scale_factor() as f32
-                                * self.gui.scale_factor,
+                                * config.gui_scale,
                 };
 
                 {
                         self.gui.begin_frame(&self.window.clone());
 
-                        self.gui.render();
+                        self.gui.render(config);
 
                         self.gui.end_frame_and_draw(
                                 &self.device,

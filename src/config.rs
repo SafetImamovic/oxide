@@ -9,6 +9,12 @@ pub struct Config
 
         #[cfg(target_arch = "wasm32")]
         pub default_canvas_height: u32,
+
+        pub show_start_message: bool,
+        pub show_exit_message: bool,
+        pub gui_scale: f32,
+        pub window_width: u32,
+        pub window_height: u32,
 }
 
 impl Config
@@ -42,6 +48,11 @@ impl Default for Config
                         default_canvas_width: 1280,
                         #[cfg(target_arch = "wasm32")]
                         default_canvas_height: 720,
+                        show_start_message: true,
+                        show_exit_message: true,
+                        gui_scale: 1.0,
+                        window_width: 1280,
+                        window_height: 720,
                 }
         }
 }
