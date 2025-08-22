@@ -27,6 +27,7 @@ egui-wgpu = { version = "0.32.0", default-features = false }
 egui-winit = { version = "0.32.0", default-features = false }
 colored = "3.0.0"
 getrandom = { version = "0.3", features = ["wasm_js"] }
+cgmath = "0.18.0"
 
 [dependencies.image]
 version = "0.25.6"

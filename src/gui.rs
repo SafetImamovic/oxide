@@ -12,12 +12,13 @@ use wgpu::TextureView;
 use winit::event::WindowEvent;
 use winit::window::Window;
 
+use crate::Config;
+
 pub struct GuiRenderer
 {
         state: State,
         renderer: Renderer,
         frame_started: bool,
-        pub scale_factor: f32,
 }
 
 impl GuiRenderer
@@ -55,7 +56,6 @@ impl GuiRenderer
 
                 GuiRenderer {
                         state: egui_state,
-                        scale_factor,
                         renderer: egui_renderer,
                         frame_started: false,
                 }
@@ -148,14 +148,20 @@ impl GuiRenderer
                 self.frame_started = false;
         }
 
-        pub fn render(&mut self)
+        pub fn render(
+                &mut self,
+                config: &mut crate::Config,
+        )
         {
-                self.debug_window();
+                self.debug_window(config);
         }
 
-        pub fn debug_window(&mut self)
+        pub fn debug_window(
+                &mut self,
+                config: &mut crate::Config,
+        )
         {
-                let mut scale: f32 = self.scale_factor;
+                let mut scale: f32 = config.gui_scale;
 
                 let ui_def = |ui: &mut Ui| {
                         ui.label(format!("Scale: {:.1}", scale));
@@ -181,14 +187,6 @@ impl GuiRenderer
                                 ui.horizontal(ui_def);
                         });
 
-                self.scale(scale);
-        }
-
-        pub fn scale(
-                &mut self,
-                scale: f32,
-        )
-        {
-                self.scale_factor = scale;
+                config.gui_scale = scale;
         }
 }

@@ -253,7 +253,7 @@ impl ApplicationHandler<State> for App
                         WindowEvent::Resized(_size) => self.resize(),
                         WindowEvent::RedrawRequested =>
                         {
-                                match state.render()
+                                match state.render(&mut self.config)
                                 {
                                         Ok(_) =>
                                         {}
