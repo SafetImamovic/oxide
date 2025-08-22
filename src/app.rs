@@ -245,6 +245,8 @@ impl ApplicationHandler<State> for App
                         None => return,
                 };
 
+                state.camera_controller.process_events(&event);
+
                 state.gui.handle_input(&state.window.clone(), &event);
 
                 match event
@@ -253,6 +255,8 @@ impl ApplicationHandler<State> for App
                         WindowEvent::Resized(_size) => self.resize(),
                         WindowEvent::RedrawRequested =>
                         {
+                                state.update();
+
                                 match state.render(&mut self.config)
                                 {
                                         Ok(_) =>
