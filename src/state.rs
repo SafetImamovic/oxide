@@ -464,7 +464,7 @@ impl State
                         eye: (0.0, 1.0, 2.0).into(),
                         target: (0.4, 0.0, 0.3).into(),
                         up: cgmath::Vector3::unit_y(),
-                        aspect: config.width as f32 / config.height as f32,
+                        aspect: 1.0,
                         fovy: 45.0,
                         znear: 0.1,
                         zfar: 100.0,
@@ -689,7 +689,11 @@ impl State
         pub fn update(&mut self)
         {
                 self.camera_controller.update_camera(&mut self.camera);
+
+                self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+
                 self.camera_uniform.update_view_proj(&self.camera);
+
                 self.queue.write_buffer(
                         &self.camera_buffer,
                         0,
