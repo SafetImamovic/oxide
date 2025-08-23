@@ -271,7 +271,7 @@ impl State
                         // environments, because wasm only has 1
                         // present mode.
                         #[cfg(not(target_arch = "wasm32"))]
-                        present_mode: surface_caps.present_modes[3],
+                        present_mode: surface_caps.present_modes[1],
 
                         alpha_mode: surface_caps.alpha_modes[0],
 
@@ -658,14 +658,16 @@ impl State
                         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
                 }
 
+                let scale = self.window.as_ref().scale_factor() as f32;
+
                 let screen_descriptor = ScreenDescriptor {
                         size_in_pixels: [self.config.width, self.config.height],
-                        pixels_per_point: self.window.as_ref().scale_factor() as f32
-                                * config.gui_scale,
+                        pixels_per_point: 1.0 / scale, /* inversely counteracts the
+                                                        * Browser DPI */
                 };
 
                 {
-                        self.gui.begin_frame(&self.window.clone());
+                        self.gui.begin_frame(&self.window.clone(), config);
 
                         self.gui.render(config);
 

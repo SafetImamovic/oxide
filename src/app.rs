@@ -90,8 +90,6 @@ impl App
                 is_pressed: bool,
         )
         {
-                log::info!("{:#?}", code);
-
                 if let (KeyCode::Escape, true) = (code, is_pressed)
                 {
                         log::info!("Oxide Render Engine Exiting. bye!");
@@ -149,6 +147,14 @@ impl App
 
                         self.state.as_mut().unwrap().num_indices = SQ_INDICES_2.len() as u32;
                 }
+
+                if let (KeyCode::Tab, true) = (code, is_pressed)
+                {
+                        if let Some(state) = self.state.as_mut()
+                        {
+                                state.gui.show_right_panel = !state.gui.show_right_panel;
+                        }
+                }
         }
 }
 
@@ -163,7 +169,8 @@ impl ApplicationHandler<State> for App
         )
         {
                 #[allow(unused_mut)]
-                let mut window_attributes = Window::default_attributes();
+                let mut window_attributes =
+                        Window::default_attributes().with_title("Oxide Render Engine");
 
                 #[cfg(target_arch = "wasm32")]
                 {
