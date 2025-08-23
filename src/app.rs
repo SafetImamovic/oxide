@@ -90,8 +90,6 @@ impl App
                 is_pressed: bool,
         )
         {
-                log::info!("{:#?}", code);
-
                 if let (KeyCode::Escape, true) = (code, is_pressed)
                 {
                         log::info!("Oxide Render Engine Exiting. bye!");
@@ -171,7 +169,8 @@ impl ApplicationHandler<State> for App
         )
         {
                 #[allow(unused_mut)]
-                let mut window_attributes = Window::default_attributes();
+                let mut window_attributes =
+                        Window::default_attributes().with_title("Oxide Render Engine");
 
                 #[cfg(target_arch = "wasm32")]
                 {

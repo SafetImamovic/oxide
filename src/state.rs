@@ -271,7 +271,7 @@ impl State
                         // environments, because wasm only has 1
                         // present mode.
                         #[cfg(not(target_arch = "wasm32"))]
-                        present_mode: surface_caps.present_modes[3],
+                        present_mode: surface_caps.present_modes[1],
 
                         alpha_mode: surface_caps.alpha_modes[0],
 
