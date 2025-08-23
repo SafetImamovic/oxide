@@ -74,16 +74,21 @@ impl GuiRenderer
                 v: f32,
         )
         {
-                self.context().set_pixels_per_point(v);
+                self.context().set_pixels_per_point(1.0);
         }
 
         pub fn begin_frame(
                 &mut self,
                 window: &Window,
+                config: &crate::config::Config,
         )
         {
+                self.ppp(Self::current_pixels_per_point(window, config));
+
                 let raw_input = self.state.take_egui_input(window);
+
                 self.state.egui_ctx().begin_pass(raw_input);
+
                 self.frame_started = true;
         }
 
@@ -104,17 +109,12 @@ impl GuiRenderer
                         );
                 }
 
-                self.ppp(screen_descriptor.pixels_per_point);
-
                 let full_output = self.state.egui_ctx().end_pass();
 
                 self.state
                         .handle_platform_output(window, full_output.platform_output);
 
-                let tris = self
-                        .state
-                        .egui_ctx()
-                        .tessellate(full_output.shapes, self.state.egui_ctx().pixels_per_point());
+                let tris = self.state.egui_ctx().tessellate(full_output.shapes, 1.0);
                 for (id, image_delta) in &full_output.textures_delta.set
                 {
                         self.renderer
@@ -172,7 +172,8 @@ impl GuiRenderer
 
                 if self.show_right_panel
                 {
-                        egui::SidePanel::right("right_panel")
+                        egui::Window::new("Right Panel")
+                                .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
                                 .default_width(300.0)
                                 .show(self.context(), |ui| {
                                         ui.label("Docked content");
@@ -190,5 +191,27 @@ impl GuiRenderer
                 */
 
                 config.gui_scale = scale;
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        pub fn current_pixels_per_point(
+                window: &winit::window::Window,
+                config: &crate::config::Config,
+        ) -> f32
+        {
+                let ppp = web_sys::window().unwrap().device_pixel_ratio() as f32;
+
+                log::info!("PPP: {ppp}");
+
+                ppp
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        pub fn current_pixels_per_point(
+                window: &winit::window::Window,
+                config: &crate::config::Config,
+        ) -> f32
+        {
+                window.scale_factor() as f32 * config.gui_scale
         }
 }
