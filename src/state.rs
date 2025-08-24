@@ -1,6 +1,7 @@
 use crate::geometry::vertex::{INDICES, TRIANGLE, Vertex};
 use crate::gui::GuiRenderer;
 use crate::texture::Texture;
+use cgmath::prelude::*;
 use egui_wgpu::ScreenDescriptor;
 use image::GenericImageView;
 use std::sync::Arc;
@@ -150,7 +151,18 @@ pub struct State
         pub camera_bind_group: wgpu::BindGroup,
 
         pub camera_controller: crate::camera::Controller,
+
+        pub instances: Vec<crate::Instance>,
+
+        pub instance_buffer: wgpu::Buffer,
 }
+
+const NUM_INSTANCES_PER_ROW: u32 = 10;
+const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+        NUM_INSTANCES_PER_ROW as f32 * 0.5,
+        0.0,
+        NUM_INSTANCES_PER_ROW as f32 * 0.5,
+);
 
 impl State
 {
@@ -317,7 +329,7 @@ impl State
                         vertex: wgpu::VertexState {
                                 module: &shader,
                                 entry_point: Some("vs_main"), // 1.
-                                buffers: &[vertex_buffer],    // 2.
+                                buffers: &[vertex_buffer, crate::InstanceRaw::desc()], // 2.
                                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                         },
                         fragment: Some(wgpu::FragmentState {
@@ -462,7 +474,7 @@ impl State
 
                 let camera = crate::camera::Camera {
                         eye: (0.0, 1.0, 2.0).into(),
-                        target: (0.4, 0.0, 0.3).into(),
+                        target: (0.0, 0.0, 0.0).into(),
                         up: cgmath::Vector3::unit_y(),
                         aspect: 1.0,
                         fovy: 45.0,
@@ -494,6 +506,53 @@ impl State
                         &camera_bind_group_layout,
                 );
 
+                let instances = (0..NUM_INSTANCES_PER_ROW)
+                        .flat_map(|z| {
+                                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                                        let position = cgmath::Vector3 {
+                                                x: x as f32,
+                                                y: 0.0,
+                                                z: z as f32,
+                                        } - INSTANCE_DISPLACEMENT;
+
+                                        let rotation = if position.is_zero()
+                                        {
+                                                // this is needed so an object at (0, 0, 0) won't
+                                                // get scaled to zero
+                                                // as Quaternions can affect scale if they're not
+                                                // created correctly
+                                                cgmath::Quaternion::from_axis_angle(
+                                                        cgmath::Vector3::unit_z(),
+                                                        cgmath::Deg(0.0),
+                                                )
+                                        }
+                                        else
+                                        {
+                                                cgmath::Quaternion::from_axis_angle(
+                                                        position.normalize(),
+                                                        cgmath::Deg(45.0),
+                                                )
+                                        };
+
+                                        crate::Instance {
+                                                position,
+                                                rotation,
+                                        }
+                                })
+                        })
+                        .collect::<Vec<_>>();
+
+                let instance_data = instances
+                        .iter()
+                        .map(crate::Instance::to_raw)
+                        .collect::<Vec<_>>();
+                let instance_buffer =
+                        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                label: Some("Instance Buffer"),
+                                contents: bytemuck::cast_slice(&instance_data),
+                                usage: wgpu::BufferUsages::VERTEX,
+                        });
+
                 Ok(State {
                         camera,
                         camera_controller,
@@ -513,6 +572,8 @@ impl State
                         camera_uniform,
                         camera_buffer,
                         camera_bind_group,
+                        instances,
+                        instance_buffer,
                 })
         }
 
@@ -650,12 +711,17 @@ impl State
 
                         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
+                        render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
                         render_pass.set_index_buffer(
                                 self.index_buffer.slice(..),
                                 wgpu::IndexFormat::Uint16,
                         );
 
-                        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+                        render_pass.draw_indexed(
+                                0..self.num_indices,
+                                0,
+                                0..self.instances.len() as _,
+                        );
                 }
 
                 let scale = self.window.as_ref().scale_factor() as f32;
