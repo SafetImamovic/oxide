@@ -106,3 +106,74 @@ pub fn get_body_size() -> Option<(u32, u32)>
 
         Some((width, height))
 }
+
+/// Represents a singular instance of a Model.
+pub struct Instance
+{
+        pub position: cgmath::Vector3<f32>,
+        pub rotation: cgmath::Quaternion<f32>,
+}
+
+impl Instance
+{
+        /// Builds the matrix world transform from Vector3 postion and
+        /// Quaternion rotation.
+        ///
+        /// Applies Rotation first then Position (Matrix multiplication isn't
+        /// commutative).
+        pub fn to_raw(&self) -> InstanceRaw
+        {
+                InstanceRaw {
+                        model: (cgmath::Matrix4::from_translation(self.position)
+                                * cgmath::Matrix4::from(self.rotation))
+                        .into(),
+                }
+        }
+}
+
+/// WGSL doesn't have a Quaternion analog, so its passed in a matrix form.
+///
+/// Basically the GPU memory friendly form of an [`Instance`].
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct InstanceRaw
+{
+        pub model: [[f32; 4]; 4],
+}
+
+impl InstanceRaw
+{
+        pub fn desc() -> wgpu::VertexBufferLayout<'static>
+        {
+                use std::mem;
+                wgpu::VertexBufferLayout {
+                        array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &[
+                                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We
+                                // need to define a slot
+                                // for each vec4. We'll have to reassemble the mat4 in the shader.
+                                wgpu::VertexAttribute {
+                                        offset: 0,
+                                        shader_location: 5,
+                                        format: wgpu::VertexFormat::Float32x4,
+                                },
+                                wgpu::VertexAttribute {
+                                        offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                                        shader_location: 6,
+                                        format: wgpu::VertexFormat::Float32x4,
+                                },
+                                wgpu::VertexAttribute {
+                                        offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
+                                        shader_location: 7,
+                                        format: wgpu::VertexFormat::Float32x4,
+                                },
+                                wgpu::VertexAttribute {
+                                        offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
+                                        shader_location: 8,
+                                        format: wgpu::VertexFormat::Float32x4,
+                                },
+                        ],
+                }
+        }
+}
