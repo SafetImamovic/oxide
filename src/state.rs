@@ -155,6 +155,8 @@ pub struct State
         pub instances: Vec<crate::Instance>,
 
         pub instance_buffer: wgpu::Buffer,
+
+        pub depth_texture: crate::texture::Texture,
 }
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
@@ -311,6 +313,7 @@ impl State
                 config: &wgpu::SurfaceConfiguration,
                 bind_group_layout: &wgpu::BindGroupLayout,
                 camera_bind_group_layout: &wgpu::BindGroupLayout,
+                depth_texture: &crate::texture::Texture,
         ) -> wgpu::RenderPipeline
         {
                 let shader = Self::load_shader_module(device);
@@ -353,11 +356,17 @@ impl State
                                 // Features::NON_FILL_POLYGON_MODE
                                 polygon_mode: wgpu::PolygonMode::Fill,
                                 // Requires Features::DEPTH_CLIP_CONTROL
-                                unclipped_depth: false,
                                 // Requires Features::CONSERVATIVE_RASTERIZATION
                                 conservative: false,
+                                unclipped_depth: false,
                         },
-                        depth_stencil: None, // 1.
+                        depth_stencil: Some(wgpu::DepthStencilState {
+                                format: crate::texture::Texture::DEPTH_FORMAT,
+                                depth_write_enabled: true,
+                                depth_compare: wgpu::CompareFunction::Less,
+                                stencil: wgpu::StencilState::default(),
+                                bias: wgpu::DepthBiasState::default(),
+                        }), // 1.
                         multisample: wgpu::MultisampleState {
                                 count: 1,                         // 2.
                                 mask: !0,                         // 3.
@@ -499,11 +508,18 @@ impl State
 
                 let camera_controller = crate::camera::Controller::new(0.01);
 
+                let depth_texture = crate::texture::Texture::create_depth_texture(
+                        &device,
+                        &config,
+                        "depth_texture",
+                );
+
                 let render_pipeline = Self::get_render_pipeline(
                         &device,
                         &config,
                         &texture_bind_group_layout,
                         &camera_bind_group_layout,
+                        &depth_texture,
                 );
 
                 let instances = (0..NUM_INSTANCES_PER_ROW)
@@ -574,6 +590,7 @@ impl State
                         camera_bind_group,
                         instances,
                         instance_buffer,
+                        depth_texture,
                 })
         }
 
@@ -616,6 +633,12 @@ impl State
                 {
                         return;
                 }
+
+                self.depth_texture = crate::texture::Texture::create_depth_texture(
+                        &self.device,
+                        &self.config,
+                        "depth_texture",
+                );
 
                 // Clamping to max dim to prevent panic!
                 let max_dim = self.device.limits().max_texture_dimension_2d;
@@ -698,7 +721,16 @@ impl State
                                                         },
                                                 },
                                         )],
-                                        depth_stencil_attachment: None,
+                                        depth_stencil_attachment: Some(
+                                                wgpu::RenderPassDepthStencilAttachment {
+                                                        view: &self.depth_texture.view,
+                                                        depth_ops: Some(wgpu::Operations {
+                                                                load: wgpu::LoadOp::Clear(1.0),
+                                                                store: wgpu::StoreOp::Store,
+                                                        }),
+                                                        stencil_ops: None,
+                                                },
+                                        ),
                                         occlusion_query_set: None,
                                         timestamp_writes: None,
                                 });
