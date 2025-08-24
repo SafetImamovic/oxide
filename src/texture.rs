@@ -15,7 +15,7 @@ impl Texture
                 label: &str,
         ) -> anyhow::Result<Self>
         {
-                let bytes = include_bytes!("tole-tole-cat.png");
+                let bytes = include_bytes!("vro.png");
 
                 let img = image::load_from_memory(bytes)?;
 

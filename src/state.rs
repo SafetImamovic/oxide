@@ -788,11 +788,21 @@ impl State
                 Ok(())
         }
 
+        /// TODO: Abstract this away. Just temporary showcase.
+        const ASPECT_CORRECTION: bool = true;
+
         pub fn update(&mut self)
         {
                 self.camera_controller.update_camera(&mut self.camera);
 
-                self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+                if Self::ASPECT_CORRECTION
+                {
+                        self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+                }
+                else
+                {
+                        self.camera.aspect = 1.0;
+                }
 
                 self.camera_uniform.update_view_proj(&self.camera);
 
