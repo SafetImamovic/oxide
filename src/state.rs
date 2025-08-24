@@ -634,23 +634,25 @@ impl State
                         return;
                 }
 
+                // Clamping to max dim to prevent panic!
+                let max_dim = self.device.limits().max_texture_dimension_2d;
+                let final_width = width.min(max_dim);
+                let final_height = height.min(max_dim);
+
+                //log::info!("Resizing surface -> width: {}, height: {}", final_width,
+                // final_height);
+
+                self.config.width = final_width;
+                self.config.height = final_height;
+
+                self.surface.configure(&self.device, &self.config);
+
                 self.depth_texture = crate::texture::Texture::create_depth_texture(
                         &self.device,
                         &self.config,
                         "depth_texture",
                 );
 
-                // Clamping to max dim to prevent panic!
-                let max_dim = self.device.limits().max_texture_dimension_2d;
-                let final_width = width.min(max_dim);
-                let final_height = height.min(max_dim);
-
-                log::info!("Resizing surface -> width: {}, height: {}", final_width, final_height);
-
-                self.config.width = final_width;
-                self.config.height = final_height;
-
-                self.surface.configure(&self.device, &self.config);
                 self.is_surface_configured = true;
         }
 
