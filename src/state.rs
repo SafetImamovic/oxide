@@ -155,6 +155,8 @@ pub struct State
         pub instances: Vec<crate::Instance>,
 
         pub instance_buffer: wgpu::Buffer,
+
+        pub depth_texture: crate::texture::Texture,
 }
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
@@ -311,6 +313,7 @@ impl State
                 config: &wgpu::SurfaceConfiguration,
                 bind_group_layout: &wgpu::BindGroupLayout,
                 camera_bind_group_layout: &wgpu::BindGroupLayout,
+                depth_texture: &crate::texture::Texture,
         ) -> wgpu::RenderPipeline
         {
                 let shader = Self::load_shader_module(device);
@@ -353,11 +356,17 @@ impl State
                                 // Features::NON_FILL_POLYGON_MODE
                                 polygon_mode: wgpu::PolygonMode::Fill,
                                 // Requires Features::DEPTH_CLIP_CONTROL
-                                unclipped_depth: false,
                                 // Requires Features::CONSERVATIVE_RASTERIZATION
                                 conservative: false,
+                                unclipped_depth: false,
                         },
-                        depth_stencil: None, // 1.
+                        depth_stencil: Some(wgpu::DepthStencilState {
+                                format: crate::texture::Texture::DEPTH_FORMAT,
+                                depth_write_enabled: true,
+                                depth_compare: wgpu::CompareFunction::Less,
+                                stencil: wgpu::StencilState::default(),
+                                bias: wgpu::DepthBiasState::default(),
+                        }), // 1.
                         multisample: wgpu::MultisampleState {
                                 count: 1,                         // 2.
                                 mask: !0,                         // 3.
@@ -499,11 +508,18 @@ impl State
 
                 let camera_controller = crate::camera::Controller::new(0.01);
 
+                let depth_texture = crate::texture::Texture::create_depth_texture(
+                        &device,
+                        &config,
+                        "depth_texture",
+                );
+
                 let render_pipeline = Self::get_render_pipeline(
                         &device,
                         &config,
                         &texture_bind_group_layout,
                         &camera_bind_group_layout,
+                        &depth_texture,
                 );
 
                 let instances = (0..NUM_INSTANCES_PER_ROW)
@@ -574,6 +590,7 @@ impl State
                         camera_bind_group,
                         instances,
                         instance_buffer,
+                        depth_texture,
                 })
         }
 
@@ -622,12 +639,20 @@ impl State
                 let final_width = width.min(max_dim);
                 let final_height = height.min(max_dim);
 
-                log::info!("Resizing surface -> width: {}, height: {}", final_width, final_height);
+                //log::info!("Resizing surface -> width: {}, height: {}", final_width,
+                // final_height);
 
                 self.config.width = final_width;
                 self.config.height = final_height;
 
                 self.surface.configure(&self.device, &self.config);
+
+                self.depth_texture = crate::texture::Texture::create_depth_texture(
+                        &self.device,
+                        &self.config,
+                        "depth_texture",
+                );
+
                 self.is_surface_configured = true;
         }
 
@@ -698,7 +723,16 @@ impl State
                                                         },
                                                 },
                                         )],
-                                        depth_stencil_attachment: None,
+                                        depth_stencil_attachment: Some(
+                                                wgpu::RenderPassDepthStencilAttachment {
+                                                        view: &self.depth_texture.view,
+                                                        depth_ops: Some(wgpu::Operations {
+                                                                load: wgpu::LoadOp::Clear(1.0),
+                                                                store: wgpu::StoreOp::Store,
+                                                        }),
+                                                        stencil_ops: None,
+                                                },
+                                        ),
                                         occlusion_query_set: None,
                                         timestamp_writes: None,
                                 });
@@ -754,11 +788,21 @@ impl State
                 Ok(())
         }
 
+        /// TODO: Abstract this away. Just temporary showcase.
+        const ASPECT_CORRECTION: bool = true;
+
         pub fn update(&mut self)
         {
                 self.camera_controller.update_camera(&mut self.camera);
 
-                self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+                if Self::ASPECT_CORRECTION
+                {
+                        self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+                }
+                else
+                {
+                        self.camera.aspect = 1.0;
+                }
 
                 self.camera_uniform.update_view_proj(&self.camera);
 
