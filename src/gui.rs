@@ -132,6 +132,7 @@ impl GuiRenderer
                                 },
                         })],
                         depth_stencil_attachment: None,
+
                         timestamp_writes: None,
                         label: Some("egui main render pass"),
                         occlusion_query_set: None,
