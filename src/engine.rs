@@ -40,6 +40,8 @@ impl EngineRunner
         ///
         /// Executes the `run_app()` function of `winit::EventLoop`.
         ///
+        /// Checks if the [`Engine`] is defined.
+        ///
         /// # Returns
         ///
         /// `anyhow::Result<()>`. because `run_app()` returns a Result.
@@ -126,14 +128,7 @@ impl EngineState
                         .unwrap();
 
                 let (device, queue) =
-                        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-                                label: Some("device_queue"),
-                                required_features: wgpu::Features::default(),
-                                required_limits: wgpu::Limits::default(),
-                                memory_hints: wgpu::MemoryHints::Performance,
-                                trace: wgpu::Trace::Off,
-                        }))
-                        .unwrap();
+                        pollster::block_on(EngineBuilder::device_queue(&adapter)).unwrap();
 
                 EngineState {
                         instance,
@@ -217,7 +212,9 @@ impl ApplicationHandler for Engine
 
 /// Builder for [`Engine`].
 ///
-/// Returns a result instance of `anyhow::Result<Engine>` after calling
+/// # Returns
+///
+/// Result instance of `anyhow::Result<Engine>` after calling
 /// `build()` because of field validation.
 pub struct EngineBuilder
 {
@@ -248,6 +245,18 @@ impl EngineBuilder
                                 window: None,
                         },
                 }
+        }
+
+        pub fn keybind<F>(
+                self,
+                key_code: winit::keyboard::KeyCode,
+                f: F,
+        ) -> Self
+        where
+                F: FnOnce(winit::keyboard::KeyCode),
+        {
+                f(key_code);
+                self
         }
 
         /// Set the time (for delta timing)
@@ -372,5 +381,19 @@ impl EngineBuilder
                         .map_err(|e| anyhow::anyhow!(e))?;
 
                 Ok(adapter)
+        }
+
+        pub async fn device_queue(
+                adapter: &wgpu::Adapter
+        ) -> anyhow::Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>
+        {
+                adapter.request_device(&wgpu::DeviceDescriptor {
+                        label: Some("device_queue"),
+                        required_features: wgpu::Features::default(),
+                        required_limits: wgpu::Limits::default(),
+                        memory_hints: wgpu::MemoryHints::Performance,
+                        trace: wgpu::Trace::Off,
+                })
+                .await
         }
 }

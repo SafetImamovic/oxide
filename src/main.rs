@@ -28,7 +28,10 @@ fn main()
 
         //oxide::run().unwrap();
 
-        let engine: Engine = EngineBuilder::new().build().unwrap();
+        let engine: Engine = EngineBuilder::new()
+                .keybind(winit::keyboard::KeyCode::Tab, |x| println!("{:?}", x))
+                .build()
+                .unwrap();
 
         let runner: EngineRunner = EngineRunner::new(engine).unwrap();
 
