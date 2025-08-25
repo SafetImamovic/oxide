@@ -1,4 +1,4 @@
-use oxide::engine::{self, Engine, EngineBuilder, EngineRunner};
+use oxide::engine::{Engine, EngineBuilder, EngineRunner};
 
 fn main()
 {

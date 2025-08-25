@@ -2,19 +2,21 @@ use std::sync::Arc;
 
 use winit::{
         application::ApplicationHandler,
-        event::WindowEvent,
+        event::{KeyEvent, WindowEvent},
         event_loop::{ActiveEventLoop, EventLoop},
+        keyboard::{KeyCode, PhysicalKey},
         window::WindowId,
 };
 
 /// Runner for the [`Engine`].
-pub struct EngineRunner<'a>
+pub struct EngineRunner
 {
-        pub engine: Engine<'a>,
+        pub engine: Option<Engine>,
+
         pub event_loop: EventLoop<()>,
 }
 
-impl<'a> EngineRunner<'a>
+impl EngineRunner
 {
         /// Constructor for [`EnginerRunner`].
         ///
@@ -24,12 +26,12 @@ impl<'a> EngineRunner<'a>
         /// # Returns
         ///
         /// `anyhow::Result<EngineRunner>`.
-        pub fn new(engine: Engine<'a>) -> anyhow::Result<Self>
+        pub fn new(engine: Engine) -> anyhow::Result<Self>
         {
                 let event_loop = winit::event_loop::EventLoop::with_user_event().build()?;
 
                 Ok(Self {
-                        engine,
+                        engine: Some(engine),
                         event_loop,
                 })
         }
@@ -41,9 +43,16 @@ impl<'a> EngineRunner<'a>
         /// # Returns
         ///
         /// `anyhow::Result<()>`. because `run_app()` returns a Result.
-        pub fn run(mut self) -> anyhow::Result<()>
+        pub fn run(self) -> anyhow::Result<()>
         {
-                self.event_loop.run_app(&mut self.engine)?;
+                let mut engine = match self.engine
+                {
+                        Some(e) => e,
+                        None => anyhow::bail!("Engine doesn't exist."),
+                };
+
+                self.event_loop.run_app(&mut engine)?;
+
                 Ok(())
         }
 }
@@ -56,26 +65,14 @@ impl<'a> EngineRunner<'a>
 /// event handling and destruction of itself.
 ///
 /// Every field is **Optional**.
-pub struct Engine<'a>
+pub struct Engine
 {
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
         pub window: Option<Arc<winit::window::Window>>,
 
-        /// The WGPU instance, required to create surfaces and devices.
-        pub instance: Option<wgpu::Instance>,
-
-        /// The rendering surface tied to the window.
-        pub surface: Option<wgpu::Surface<'a>>,
-
-        /// The GPU device handle used to submit rendering commands.
-        pub device: Option<wgpu::Device>,
-
-        /// The GPU queue used to execute command buffers.
-        pub queue: Option<wgpu::Queue>,
-
-        /// The surface configuration (swapchain) for rendering.
-        pub config: Option<wgpu::SurfaceConfiguration>,
+        /// `wgpu` internals.
+        pub state: Option<EngineState>,
 
         // --- Timing ---
         /// The timestamp of the last frame, used for delta time calculations.
@@ -100,18 +97,82 @@ pub struct Engine<'a>
         pub ui: Option<crate::ui::UiSystem>,
 }
 
-impl<'a> ApplicationHandler for Engine<'a>
+pub struct EngineState
+{
+        pub instance: wgpu::Instance,
+
+        /// The handle to a physical graphics device.
+        pub adapter: wgpu::Adapter,
+
+        /// The rendering surface tied to the window.
+        pub surface: wgpu::Surface<'static>,
+
+        /// The GPU device handle used to submit rendering commands.
+        pub device: wgpu::Device,
+
+        /// The GPU queue used to execute command buffers.
+        pub queue: wgpu::Queue,
+}
+
+impl EngineState
+{
+        pub fn new(window: Arc<winit::window::Window>) -> Self
+        {
+                let instance = EngineBuilder::instance();
+
+                let surface = instance.create_surface(window.clone()).unwrap();
+
+                let adapter = pollster::block_on(EngineBuilder::adapter(&instance, window.clone()))
+                        .unwrap();
+
+                let (device, queue) =
+                        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                                label: Some("device_queue"),
+                                required_features: wgpu::Features::default(),
+                                required_limits: wgpu::Limits::default(),
+                                memory_hints: wgpu::MemoryHints::Performance,
+                                trace: wgpu::Trace::Off,
+                        }))
+                        .unwrap();
+
+                EngineState {
+                        instance,
+                        adapter,
+                        surface,
+                        device,
+                        queue,
+                }
+        }
+}
+
+impl ApplicationHandler for Engine
 {
         fn resumed(
                 &mut self,
                 event_loop: &winit::event_loop::ActiveEventLoop,
         )
         {
-                self.window = Some(Arc::new(
+                // From the winit docs:
+                //
+                // # Portability
+                //
+                // It’s recommended that applications should only initialize their
+                // graphics context and create a window after they have received their first
+                // Resumed event. Some systems (specifically Android) won’t allow applications
+                // to create a render surface until they are resumed.
+                //
+                // Reference: https://docs.rs/winit/latest/winit/application/trait.ApplicationHandler.html#tymethod.resumed
+                let window = Arc::new(
                         event_loop
                                 .create_window(winit::window::Window::default_attributes())
                                 .unwrap(),
-                ));
+                );
+
+                self.window = Some(window.clone());
+
+                let state = EngineState::new(window.clone());
+
+                self.state = Some(state);
         }
 
         fn window_event(
@@ -132,6 +193,23 @@ impl<'a> ApplicationHandler for Engine<'a>
                         {
                                 self.window.as_ref().unwrap().request_redraw();
                         }
+                        WindowEvent::KeyboardInput {
+                                event:
+                                        KeyEvent {
+                                                physical_key: PhysicalKey::Code(code),
+                                                state: key_state,
+                                                ..
+                                        },
+                                ..
+                        } =>
+                        {
+                                println!("Code: {:?}, KeyState: {:?}", code, key_state);
+
+                                if code == KeyCode::Escape
+                                {
+                                        event_loop.exit();
+                                }
+                        }
                         _ => (),
                 }
         }
@@ -141,13 +219,13 @@ impl<'a> ApplicationHandler for Engine<'a>
 ///
 /// Returns a result instance of `anyhow::Result<Engine>` after calling
 /// `build()` because of field validation.
-pub struct EngineBuilder<'a>
+pub struct EngineBuilder
 {
-        engine: Engine<'a>,
+        engine: Engine,
 }
 
 #[allow(clippy::new_without_default)]
-impl<'a> EngineBuilder<'a>
+impl EngineBuilder
 {
         /// Initializes a new build process for [`Engine`].
         ///
@@ -160,70 +238,16 @@ impl<'a> EngineBuilder<'a>
         {
                 Self {
                         engine: Engine {
-                                window: None,
-                                instance: None,
-                                surface: None,
-                                device: None,
-                                queue: None,
-                                config: None,
+                                state: None,
                                 time: None,
                                 render_ctx: None,
                                 scene: None,
                                 camera: None,
                                 input: None,
                                 ui: None,
+                                window: None,
                         },
                 }
-        }
-
-        /// Set the instance
-        pub fn with_instance(
-                mut self,
-                instance: wgpu::Instance,
-        ) -> Self
-        {
-                self.engine.instance = Some(instance);
-                self
-        }
-
-        /// Set the surface
-        pub fn with_surface(
-                mut self,
-                surface: wgpu::Surface<'a>,
-        ) -> Self
-        {
-                self.engine.surface = Some(surface);
-                self
-        }
-
-        /// Set the device
-        pub fn with_device(
-                mut self,
-                device: wgpu::Device,
-        ) -> Self
-        {
-                self.engine.device = Some(device);
-                self
-        }
-
-        /// Set the queue
-        pub fn with_queue(
-                mut self,
-                queue: wgpu::Queue,
-        ) -> Self
-        {
-                self.engine.queue = Some(queue);
-                self
-        }
-
-        /// Set the surface configuration
-        pub fn with_config(
-                mut self,
-                config: wgpu::SurfaceConfiguration,
-        ) -> Self
-        {
-                self.engine.config = Some(config);
-                self
         }
 
         /// Set the time (for delta timing)
@@ -290,38 +314,63 @@ impl<'a> EngineBuilder<'a>
         ///
         /// Does some fields validation.
         ///
+        /// Generates the `wgpu::Instance` and sets the `instance` field.
+        ///
         /// # Returns
         ///
         /// `anyhow::Result<Engine>`.
-        pub fn build(self) -> anyhow::Result<Engine<'a>>
+        pub fn build(self) -> anyhow::Result<Engine>
         {
-                /*
-                    if self.engine.window.is_none()
-                    {
-                            anyhow::bail!("Engine requires a window");
-                    }
-                    if self.engine.instance.is_none()
-                    {
-                            anyhow::bail!("Engine requires a WGPU instance");
-                    }
-                    if self.engine.surface.is_none()
-                    {
-                            anyhow::bail!("Engine requires a surface");
-                    }
-                    if self.engine.device.is_none()
-                    {
-                            anyhow::bail!("Engine requires a device");
-                    }
-                    if self.engine.queue.is_none()
-                    {
-                            anyhow::bail!("Engine requires a queue");
-                    }
-                    if self.engine.config.is_none()
-                    {
-                            anyhow::bail!("Engine requires a surface configuration");
-                    }
-                */
-
                 Ok(self.engine)
+        }
+
+        fn instance() -> wgpu::Instance
+        {
+                wgpu::Instance::new(&wgpu::InstanceDescriptor {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        backends: wgpu::Backends::PRIMARY,
+                        #[cfg(target_arch = "wasm32")]
+                        backends: wgpu::Backends::GL,
+                        ..Default::default()
+                })
+        }
+
+        fn surface<'a>(
+                instance: &wgpu::Instance,
+                window: Arc<winit::window::Window>,
+        ) -> anyhow::Result<wgpu::Surface<'a>, wgpu::CreateSurfaceError>
+        {
+                instance.create_surface(window)
+        }
+
+        async fn adapter(
+                instance: &wgpu::Instance,
+                window: Arc<winit::window::Window>,
+        ) -> anyhow::Result<wgpu::Adapter>
+        {
+                let surface = Self::surface(instance, window)?;
+
+                let adapter = instance
+                        .request_adapter(&wgpu::RequestAdapterOptions {
+                                // Either `HighPerformance` or `LowPower`.
+                                //
+                                // 1. LowPower will pick an adapter that favors battery life.
+                                //
+                                // 2. HighPerformance will pick an adapter for more power-hungry yet
+                                //    more performant GPU's, such as a dedicated graphics card.
+                                power_preference: wgpu::PowerPreference::HighPerformance,
+
+                                // Tells wgpu to find an adapter that can present to the supplied
+                                // surface.
+                                compatible_surface: Some(&surface),
+
+                                // Forces wgpu to pick an adapter that will work on all hardware.
+                                // Generally a software implementation on most systems.
+                                force_fallback_adapter: false,
+                        })
+                        .await
+                        .map_err(|e| anyhow::anyhow!(e))?;
+
+                Ok(adapter)
         }
 }
