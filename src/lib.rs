@@ -1,10 +1,15 @@
 pub mod app;
 pub mod camera;
 pub mod config;
+pub mod engine;
 pub mod geometry;
 pub mod gui;
+pub mod input;
+pub mod renderer;
+pub mod scene;
 pub mod state;
 pub mod texture;
+pub mod ui;
 pub mod utils;
 
 /// WebAssembly (WASM) architecture note:

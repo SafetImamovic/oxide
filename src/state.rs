@@ -489,6 +489,8 @@ impl State
                         fovy: 45.0,
                         znear: 0.1,
                         zfar: 100.0,
+                        yaw: cgmath::Deg(0.0),
+                        pitch: cgmath::Deg(0.0),
                 };
 
                 let mut camera_uniform = crate::camera::CameraUniform::new();
