@@ -1,3 +1,4 @@
+use derivative::Derivative;
 use egui::Context;
 use egui_wgpu::Renderer;
 use egui_wgpu::ScreenDescriptor;
@@ -11,11 +12,18 @@ use wgpu::TextureView;
 use winit::event::WindowEvent;
 use winit::window::Window;
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct GuiRenderer
 {
+        #[derivative(Debug = "ignore")]
         state: State,
+
+        #[derivative(Debug = "ignore")]
         renderer: Renderer,
+
         pub show_right_panel: bool,
+
         frame_started: bool,
 }
 

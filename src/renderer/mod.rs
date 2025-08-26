@@ -4,6 +4,7 @@ pub mod renderer;
 pub mod resource;
 pub mod shader;
 
+#[derive(Debug)]
 pub struct RenderContext
 {
         pub renderer: renderer::Renderer,

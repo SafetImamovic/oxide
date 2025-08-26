@@ -67,6 +67,7 @@ impl EngineRunner
 /// event handling and destruction of itself.
 ///
 /// Every field is **Optional**.
+#[derive(Debug)]
 pub struct Engine
 {
         // --- Core Context ---
@@ -99,6 +100,7 @@ pub struct Engine
         pub ui: Option<crate::ui::UiSystem>,
 }
 
+#[derive(Debug)]
 pub struct EngineState
 {
         pub instance: wgpu::Instance,
@@ -210,12 +212,52 @@ impl ApplicationHandler for Engine
         }
 }
 
-/// Builder for [`Engine`].
+/// A builder for the engine, responsible for preparing configuration
+/// and state before GPU resources are initialized.
 ///
-/// # Returns
+/// # Important
 ///
-/// Result instance of `anyhow::Result<Engine>` after calling
-/// `build()` because of field validation.
+/// Calling [`EngineBuilder::new`] or similar methods like
+/// [`EngineBuilder::build`] does **not** immediately create a
+/// fully usable [`Engine`].
+///
+/// These methods prepare an internal [`EngineState`] that is only
+/// finalized when the application lifecycle reaches
+/// [`ApplicationHandler::resumed`]. Some resources (e.g.,
+/// `wgpu::Surface`) require a live window handle, which is only
+/// available after `resumed()` is called.
+///
+/// In other words, constructing an `EngineBuilder` sets up everything
+/// that *can* be initialized ahead of time, while deferring
+/// GPU- and window-dependent setup until the first `resumed()` event.
+///
+/// ## Consequences
+/// - Do not expect a complete `Engine` immediately after builder methods.
+/// - GPU surface, device, and swapchain are created during `resumed()`.
+/// - After `resumed()` runs, the engine is fully initialized and ready to
+///   render.
+///
+/// # Example
+///
+/// ```rust
+/// use oxide::engine::{EngineBuilder, EngineRunner, Engine};
+///
+/// let engine: Engine = EngineBuilder::new()
+///     .build()
+///     .unwrap();
+///
+/// // EngineState is None initially.
+/// assert!(engine.state.is_none());
+///
+/// let runner: EngineRunner = EngineRunner::new(engine).unwrap();
+///
+/// // EngineState is still None.
+/// assert!(runner.engine.unwrap().state.is_none());
+///
+/// // Once run is called, EngineState is constructed.
+/// // runner.run().unwrap();
+/// ```
+#[derive(Debug)]
 pub struct EngineBuilder
 {
         engine: Engine,
@@ -224,13 +266,14 @@ pub struct EngineBuilder
 #[allow(clippy::new_without_default)]
 impl EngineBuilder
 {
-        /// Initializes a new build process for [`Engine`].
-        ///
-        /// Every field is set to `None`.
+        /// Creates a new `EngineBuilder` with default configuration.
         ///
         /// # Returns
         ///
         /// `EngineBuilder`.
+        ///
+        /// See [`EngineBuilder`] for important notes on deferred
+        /// initialization.
         pub fn new() -> Self
         {
                 Self {
@@ -328,6 +371,9 @@ impl EngineBuilder
         /// # Returns
         ///
         /// `anyhow::Result<Engine>`.
+        ///
+        /// See [`EngineBuilder`] for important notes on deferred
+        /// initialization.
         pub fn build(self) -> anyhow::Result<Engine>
         {
                 Ok(self.engine)
