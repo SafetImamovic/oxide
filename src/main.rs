@@ -1,7 +1,8 @@
 use oxide::{
         engine::EngineHandler,
-        geometry::{mesh::Mesh, vertex::Vertex},
 };
+use oxide::geometry::mesh::Mesh;
+use oxide::geometry::vertex::Vertex;
 
 pub const PENTAGON: &[Vertex] = &[
         Vertex {

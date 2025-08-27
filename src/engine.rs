@@ -68,7 +68,7 @@ use winit::{
         window::WindowId,
 };
 
-use crate::{geometry::mesh::Mesh, resource::Resources};
+use crate::{geometry::mesh::Mesh, renderer::pipeline::PipelineManager, resource::Resources};
 
 // Engine manages a global setup function
 static SETUP_FN: OnceLock<fn() -> EngineRunner> = OnceLock::new();
@@ -397,6 +397,12 @@ pub struct EngineState
         pub texture_format: wgpu::TextureFormat,
 
         pub surface_caps: wgpu::SurfaceCapabilities,
+
+        pub vertex_buffers: Vec<wgpu::Buffer>,
+
+        pub index_buffers: Vec<wgpu::Buffer>,
+
+        pub render_pipeline: wgpu::RenderPipeline,
 }
 
 #[derive(Debug)]
@@ -439,6 +445,15 @@ impl EngineState
                 let surface_configuration =
                         EngineBuilder::surface_configuration(texture_format, &size, &surface_caps);
 
+                let depth_texture = crate::texture::Texture::create_depth_texture(
+                        &device,
+                        &surface_configuration,
+                        "depth_texture",
+                );
+
+                let render_pipeline =
+                        PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
+
                 EngineState {
                         surface,
                         adapter,
@@ -447,6 +462,9 @@ impl EngineState
                         surface_caps,
                         texture_format,
                         surface_configuration,
+                        render_pipeline: render_pipeline.render_pipeline,
+                        index_buffers: vec![],
+                        vertex_buffers: vec![],
                 }
         }
 }
@@ -484,7 +502,13 @@ impl ApplicationHandler for Engine
 
                 self.window = Some(window.clone());
 
-                let state = EngineState::new(&self.core.instance, window.clone());
+                let mut state = EngineState::new(&self.core.instance, window.clone());
+
+                for (k, v) in &self.resources.meshes
+                {
+                        state.vertex_buffers.push(v.new_vertex_buffer(&state.device));
+                        state.index_buffers.push(v.new_index_buffer(&state.device));
+                }
 
                 self.state = Some(state);
         }
