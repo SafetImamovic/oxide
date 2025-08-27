@@ -226,20 +226,20 @@ pub fn run() -> anyhow::Result<()>
 
         crate::utils::bootstrap::show_start_message();
 
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-                let msg = get_exit_message();
-
-                log::info!("{msg}");
-        }
-
         let mut engine = crate::engine::EngineBuilder::new().build().unwrap();
 
         engine.add_mesh("Pentagon", MESH);
 
         let runner = crate::engine::EngineRunner::new(engine)?;
 
-        runner.run().unwrap();
+        runner.run()?;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+                let msg = get_exit_message();
+
+                log::info!("{msg}");
+        }
 
         Ok(())
 }

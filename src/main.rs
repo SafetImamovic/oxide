@@ -1,6 +1,6 @@
 fn main()
 {
-        let runner = oxide::engine::run().unwrap();
+        oxide::engine::run().unwrap();
 }
 
 /*
