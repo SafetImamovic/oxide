@@ -30,6 +30,8 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 cgmath = "0.18.0"
 derivative = "2.2.0"
 once_cell = "1.21.3"
+wasm-bindgen-futures = "0.4.50"
+web-sys = "0.3.77"
 
 [dependencies.image]
 version = "0.25.6"

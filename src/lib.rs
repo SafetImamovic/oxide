@@ -52,7 +52,7 @@ pub fn run() -> anyhow::Result<()>
 
         let mut config = crate::utils::bootstrap::create_config();
 
-        crate::utils::bootstrap::show_start_message(&config);
+        crate::utils::bootstrap::show_start_message();
 
         #[allow(unused_mut)]
         let mut app = App::new(
@@ -73,7 +73,7 @@ pub fn run() -> anyhow::Result<()>
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-                let msg = get_exit_message(&app.config);
+                let msg = get_exit_message();
                 log::info!("{msg}");
         }
 

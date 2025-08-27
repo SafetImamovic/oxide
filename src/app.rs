@@ -190,11 +190,7 @@ impl ApplicationHandler<State> for App
 
                 let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                        // Native builds can block on async state initialization.
-                        self.state = Some(pollster::block_on(State::new(window)).unwrap());
-                }
+                
 
                 #[cfg(target_arch = "wasm32")]
                 {

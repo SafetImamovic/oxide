@@ -41,9 +41,6 @@
 //!                 oxide::engine::EngineRunner::new(engine).unwrap()
 //!         }
 //! }
-//!
-//! // Run the engine (native execution)
-//! oxide::engine::run::<App>();
 //! ```
 //!
 //! On WASM, the same `App` setup is used, but the engine starts automatically
@@ -53,7 +50,7 @@ use std::{
         collections::HashMap,
         sync::{Arc, OnceLock},
 };
-
+use wgpu::Features;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
 
@@ -67,8 +64,10 @@ use winit::{
         keyboard::{KeyCode, PhysicalKey},
         window::WindowId,
 };
-
-use crate::{geometry::mesh::Mesh, renderer::pipeline::PipelineManager, resource::Resources};
+use winit::window::Window;
+use crate::{ renderer::pipeline::PipelineManager, resource::Resources};
+use crate::app::App;
+use crate::state::State;
 
 // Engine manages a global setup function
 static SETUP_FN: OnceLock<fn() -> EngineRunner> = OnceLock::new();
@@ -112,9 +111,6 @@ fn register_setup<H: EngineHandler>()
 ///                oxide::engine::EngineRunner::new(engine).unwrap()
 ///        }
 /// }
-///
-/// // The user then runs the App.
-/// oxide::engine::run::<App>();
 /// ```
 pub trait EngineHandler
 {
@@ -129,54 +125,6 @@ pub trait EngineHandler
         /// An [`EngineRunner`](crate::engine::EngineRunner) instance that
         /// drives the engine loop.
         fn setup() -> EngineRunner;
-}
-
-/// Runs the engine using the given [`EngineHandler`] implementation.
-///
-/// This is the main entry point for native applications.  
-/// It registers the `setup` function of the given handler type `H`
-/// so that it can later be retrieved and invoked in [`start`].
-///
-/// On native platforms, this function:
-/// 1. Registers the engine's setup routine via [`register_setup`].
-/// 2. Calls [`start`] to construct an [`EngineRunner`] and begin the
-///    application's main loop.
-///
-/// On `wasm32` targets, this function has no direct effect because
-/// execution begins from [`run_wasm`] instead.
-///
-/// # Important
-/// - `H` must implement [`EngineHandler`] and provide a static `fn setup() ->
-///   EngineRunner`.
-/// - On WebAssembly, the setup routine is registered in the same way, but the
-///   runtime entry point is [`run_wasm`] due to how `wasm-bindgen` manages
-///   lifecycle.
-///
-/// # Examples
-/// ```
-/// use oxide::engine::{EngineHandler, EngineBuilder, EngineRunner};
-///
-/// struct App;
-///
-/// impl EngineHandler for App
-/// {
-///        fn setup() -> oxide::engine::EngineRunner
-///        {
-///                log::info!("Setting up engine!");
-///
-///                let engine = oxide::engine::EngineBuilder::new().build().unwrap();
-///
-///                oxide::engine::EngineRunner::new(engine).unwrap()
-///        }
-/// }
-///
-/// // The user then runs the App.
-/// oxide::engine::run::<App>();
-/// ```
-pub fn run<H: EngineHandler>()
-{
-        register_setup::<H>();
-        start();
 }
 
 /// Starts the engine by invoking the registered setup function
@@ -202,17 +150,7 @@ pub fn run<H: EngineHandler>()
 /// // Normally not called directly by user code.
 /// run::<MyApp>(); // internally calls start()
 /// ```
-fn start()
-{
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-                let setup = SETUP_FN.get().expect("No setup function registered");
 
-                let runner = setup();
-
-                runner.run().unwrap();
-        }
-}
 
 /// WebAssembly entry point for the engine runtime.
 ///
@@ -243,7 +181,65 @@ pub fn run_wasm() -> Result<(), JsValue>
 {
         console_error_panic_hook::set_once();
 
-        start(); // <-- calls a statically defined fn
+        run(); // <-- calls a statically defined fn
+
+        Ok(())
+}
+
+use crate::geometry::mesh::Mesh;
+use crate::geometry::vertex::Vertex;
+use crate::utils::exit::get_exit_message;
+
+pub const PENTAGON: &[Vertex] = &[
+        Vertex {
+                position: [-0.0868241, 0.49240386, 0.0],
+                tex_coords: [0.4131759, 0.00759614],
+        }, // A
+        Vertex {
+                position: [-0.49513406, 0.06958647, 0.0],
+                tex_coords: [0.0048659444, 0.43041354],
+        }, // B
+        Vertex {
+                position: [-0.21918549, -0.44939706, 0.0],
+                tex_coords: [0.28081453, 0.949397],
+        }, // C
+        Vertex {
+                position: [0.35966998, -0.3473291, 0.0],
+                tex_coords: [0.85967, 0.84732914],
+        }, // D
+        Vertex {
+                position: [0.44147372, 0.2347359, 0.0],
+                tex_coords: [0.9414737, 0.2652641],
+        }, // E
+];
+
+pub const P_INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+
+pub const MESH: Mesh = Mesh {
+        vertices: PENTAGON,
+        indices: P_INDICES,
+};
+
+pub fn run() -> anyhow::Result<()>
+{
+        crate::utils::bootstrap::config_logging();
+
+        crate::utils::bootstrap::show_start_message();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+                let msg = get_exit_message();
+
+                log::info!("{msg}");
+        }
+
+        let mut engine = crate::engine::EngineBuilder::new().build().unwrap();
+
+        engine.add_mesh("Pentagon", MESH);
+
+        let runner = crate::engine::EngineRunner::new(engine)?;
+
+        runner.run().unwrap();
 
         Ok(())
 }
@@ -253,7 +249,7 @@ pub struct EngineRunner
 {
         pub engine: Option<Engine>,
 
-        pub event_loop: EventLoop<()>,
+        pub event_loop: EventLoop<EngineState>,
 }
 
 impl EngineRunner
@@ -266,9 +262,14 @@ impl EngineRunner
         /// # Returns
         ///
         /// `anyhow::Result<EngineRunner>`.
-        pub fn new(engine: Engine) -> anyhow::Result<Self>
+        pub fn new(mut engine: Engine) -> anyhow::Result<Self>
         {
-                let event_loop = winit::event_loop::EventLoop::with_user_event().build()?;
+                let event_loop: EventLoop<EngineState> = winit::event_loop::EventLoop::with_user_event().build()?;
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                        engine.proxy = Some(event_loop.create_proxy());
+                }
 
                 Ok(Self {
                         engine: Some(engine),
@@ -318,11 +319,14 @@ impl EngineRunner
 #[derive(Debug)]
 pub struct Engine
 {
+        /// On browser environments, an [`EventLoopProxy`] is needed
+        /// to send events back into the event loop asynchronously.
+        #[cfg(target_arch = "wasm32")]
+        pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
+
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
         pub window: Option<Arc<winit::window::Window>>,
-
-        pub core: EngineCore,
 
         /// `wgpu` internals.
         pub state: Option<EngineState>,
@@ -365,7 +369,7 @@ impl Engine
 
         pub fn render(&mut self) -> anyhow::Result<(), wgpu::SurfaceError>
         {
-                let state = self.state.as_ref().unwrap();
+                let state = self.state.as_mut().unwrap();
 
                 self.window.clone().unwrap().request_redraw();
 
@@ -428,6 +432,15 @@ impl Engine
                                     timestamp_writes: None,
                             });
 
+
+
+                        for (k, v) in &self.resources.meshes
+                        {
+                                state.vertex_buffers.push(v.new_vertex_buffer(&state.device));
+                                state.index_buffers.push(v.new_index_buffer(&state.device));
+                        }
+
+
                         render_pass.set_pipeline(&state.render_pipeline);
 
                         let pentagon = self.resources.meshes.get("Pentagon").unwrap();
@@ -438,8 +451,6 @@ impl Engine
                                 state.index_buffers.get(0).unwrap().slice(..),
                                 wgpu::IndexFormat::Uint16,
                         );
-
-                        println!("{}", pentagon.get_num_vertices());
 
                         render_pass.draw(
                                 0..pentagon.get_num_vertices(),
@@ -453,6 +464,8 @@ impl Engine
 
                 Ok(())
         }
+
+
 
         /// Handles window resize events.
         ///
@@ -533,11 +546,7 @@ pub struct EngineState
         pub render_pipeline: wgpu::RenderPipeline,
 }
 
-#[derive(Debug)]
-pub struct EngineCore
-{
-        pub instance: wgpu::Instance,
-}
+
 
 impl EngineState
 {
@@ -551,20 +560,19 @@ impl EngineState
         /// # Panics
         /// Panics if surface creation, adapter selection, or device/queue
         /// creation fails.
-        pub fn new(
-                instance: &wgpu::Instance,
+        pub async fn new(
                 window: Arc<winit::window::Window>,
-        ) -> Self
+        ) -> anyhow::Result<EngineState>
         {
+                let instance = EngineBuilder::instance();
+
                 let size = window.inner_size();
 
                 let surface = instance.create_surface(window.clone()).unwrap();
 
-                let adapter = pollster::block_on(EngineBuilder::adapter(instance, window.clone()))
-                        .unwrap();
+                let adapter = EngineBuilder::adapter(&instance, window.clone()).await.unwrap();
 
-                let (device, queue) =
-                        pollster::block_on(EngineBuilder::device_queue(&adapter)).unwrap();
+                let (device, queue) = EngineBuilder::device_queue(&adapter).await.unwrap();
 
                 let surface_caps = surface.get_capabilities(&adapter);
 
@@ -582,7 +590,7 @@ impl EngineState
                 let render_pipeline =
                         PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
 
-                EngineState {
+                Ok(EngineState {
                         is_surface_configured: false,
                         surface,
                         adapter,
@@ -594,12 +602,32 @@ impl EngineState
                         render_pipeline: render_pipeline.render_pipeline,
                         index_buffers: vec![],
                         vertex_buffers: vec![],
-                }
+                })
         }
 }
 
-impl ApplicationHandler for Engine
+impl ApplicationHandler<EngineState> for Engine
 {
+        /// Handles custom user events.
+        ///
+        /// On WASM, async initialization sends the completed [`State`] via a
+        /// proxy, which is received here and stored.
+        fn user_event(
+                &mut self,
+                _event_loop: &ActiveEventLoop,
+                event: EngineState,
+        )
+        {
+                #[cfg(target_arch = "wasm32")]
+                {
+                        self.window.clone().expect("Window doesn't exist.").request_redraw();
+
+                        web_sys::console::log_1(&"user_event fired".into());
+                }
+
+                self.state = Some(event);
+        }
+
         fn resumed(
                 &mut self,
                 event_loop: &winit::event_loop::ActiveEventLoop,
@@ -623,23 +651,60 @@ impl ApplicationHandler for Engine
                         return;
                 }
 
+                #[allow(unused_mut)]
+                let mut window_attributes =
+                    Window::default_attributes().with_title("Oxide Render Engine");
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                        use wasm_bindgen::JsCast;
+                        use winit::platform::web::WindowAttributesExtWebSys;
+
+                        const CANVAS_ID: &str = "canvas";
+
+                        let window = wgpu::web_sys::window().unwrap_throw();
+                        let document = window.document().unwrap_throw();
+                        let canvas = document.get_element_by_id(CANVAS_ID).unwrap_throw();
+                        let html_canvas_element = canvas.unchecked_into();
+
+                        window_attributes =
+                            window_attributes.with_canvas(Some(html_canvas_element));
+                }
+
                 let window = Arc::new(
                         event_loop
-                                .create_window(winit::window::Window::default_attributes())
-                                .unwrap(),
+                            .create_window(window_attributes)
+                            .unwrap(),
                 );
 
                 self.window = Some(window.clone());
 
-                let mut state = EngineState::new(&self.core.instance, window.clone());
-
-                for (k, v) in &self.resources.meshes
+                #[cfg(not(target_arch = "wasm32"))]
                 {
-                        state.vertex_buffers.push(v.new_vertex_buffer(&state.device));
-                        state.index_buffers.push(v.new_index_buffer(&state.device));
+                        // Native builds can block on async state initialization.
+                        self.state = Some(pollster::block_on(EngineState::new(window)).unwrap());
                 }
 
-                self.state = Some(state);
+                #[cfg(target_arch = "wasm32")]
+                {
+                        // In WASM builds, async tasks must be spawned without blocking.
+                        #[cfg(target_arch = "wasm32")]
+                        if let Some(proxy) = self.proxy.take() {
+                                wasm_bindgen_futures::spawn_local(async move {
+                                        let state_result = EngineState::new(window).await;
+                                        match state_result {
+                                                Ok(state) => {
+                                                        web_sys::console::log_1(&"State initialized, sending event".into());
+                                                        assert!(proxy.send_event(state).is_ok());
+                                                },
+                                                Err(e) => web_sys::console::error_1(&format!("State init failed: {:?}", e).into()),
+                                        }
+                                });
+                        } else {
+                                web_sys::console::log_1(&"Proxy is None, skipping async init".into());
+                        }
+
+                }
         }
 
         fn window_event(
@@ -765,18 +830,13 @@ impl EngineBuilder
         /// initialization.
         pub fn new() -> Self
         {
-                let instance = EngineBuilder::instance();
-
-                let core = EngineCore {
-                        instance,
-                };
-
                 let resources = Resources::new();
 
                 Self {
                         engine: Engine {
+                                #[cfg(target_arch = "wasm32")]
+                                proxy: None,
                                 resources,
-                                core,
                                 state: None,
                                 time: None,
                                 render_ctx: None,
@@ -933,13 +993,30 @@ impl EngineBuilder
         ) -> anyhow::Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>
         {
                 adapter.request_device(&wgpu::DeviceDescriptor {
-                        label: Some("device_queue"),
-                        required_features: wgpu::Features::default(),
-                        required_limits: wgpu::Limits::default(),
-                        memory_hints: wgpu::MemoryHints::Performance,
+                        label: None,
+                        required_features: Features::empty(),
+                        // WebGL doesn't support all of wgpu's features, so if
+                        // we're building for the web we'll have to disable some.
+                        // Describes the limit of certain types of resources that we can
+                        // create.
+                        //
+                        // Reference <https://gpuweb.github.io/gpuweb/#gpusupportedlimits>
+                        required_limits: if cfg!(target_arch = "wasm32")
+                        {
+                                wgpu::Limits::downlevel_webgl2_defaults()
+                        }
+                        else
+                        {
+                                wgpu::Limits::default()
+                        },
+
+                        // Provides the adapter with a preferred memory allocation strategy.
+                        memory_hints: Default::default(),
+
+                        // Debug tracing.
                         trace: wgpu::Trace::Off,
                 })
-                .await
+                    .await
         }
 
         fn texture_format(surface_caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat

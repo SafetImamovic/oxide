@@ -1,13 +1,8 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::UnwrapThrowExt;
 
-pub fn show_start_message(config: &crate::Config)
+pub fn show_start_message()
 {
-        if !config.show_start_message
-        {
-                return;
-        }
-
         let oxide_string = r#"
 
       ░██████   ░██    ░██ ░██████░███████   ░██████████ 
