@@ -14,6 +14,8 @@ pub struct Camera
         pub fovy: f32,
         pub znear: f32,
         pub zfar: f32,
+        pub yaw: cgmath::Deg<f32>,
+        pub pitch: cgmath::Deg<f32>,
 }
 
 impl Camera
@@ -113,6 +115,10 @@ pub struct Controller
         pub is_right_pressed: bool,
         pub is_top_pressed: bool,
         pub is_down_pressed: bool,
+        pub is_yaw_left: bool,
+        pub is_yaw_right: bool,
+        pub is_pitch_up: bool,
+        pub is_pitch_down: bool,
 }
 
 impl Controller
@@ -127,6 +133,10 @@ impl Controller
                         is_right_pressed: false,
                         is_top_pressed: false,
                         is_down_pressed: false,
+                        is_yaw_left: false,
+                        is_yaw_right: false,
+                        is_pitch_up: false,
+                        is_pitch_down: false,
                 }
         }
 
@@ -150,22 +160,22 @@ impl Controller
                                 let is_pressed = *state == ElementState::Pressed;
                                 match keycode
                                 {
-                                        KeyCode::KeyW | KeyCode::ArrowUp =>
+                                        KeyCode::KeyW =>
                                         {
                                                 self.is_forward_pressed = is_pressed;
                                                 true
                                         }
-                                        KeyCode::KeyA | KeyCode::ArrowLeft =>
+                                        KeyCode::KeyA =>
                                         {
                                                 self.is_left_pressed = is_pressed;
                                                 true
                                         }
-                                        KeyCode::KeyS | KeyCode::ArrowDown =>
+                                        KeyCode::KeyS =>
                                         {
                                                 self.is_backward_pressed = is_pressed;
                                                 true
                                         }
-                                        KeyCode::KeyD | KeyCode::ArrowRight =>
+                                        KeyCode::KeyD =>
                                         {
                                                 self.is_right_pressed = is_pressed;
                                                 true
@@ -178,6 +188,26 @@ impl Controller
                                         KeyCode::KeyE =>
                                         {
                                                 self.is_top_pressed = is_pressed;
+                                                true
+                                        }
+                                        KeyCode::ArrowLeft =>
+                                        {
+                                                self.is_yaw_left = is_pressed;
+                                                true
+                                        }
+                                        KeyCode::ArrowRight =>
+                                        {
+                                                self.is_yaw_right = is_pressed;
+                                                true
+                                        }
+                                        KeyCode::ArrowUp =>
+                                        {
+                                                self.is_pitch_up = is_pressed;
+                                                true
+                                        }
+                                        KeyCode::ArrowDown =>
+                                        {
+                                                self.is_pitch_down = is_pressed;
                                                 true
                                         }
                                         _ => false,
@@ -201,6 +231,7 @@ impl Controller
                 let up = right.cross(forward).normalize();
 
                 let mut delta = Vector3::new(0.0, 0.0, 0.0);
+                let mut rot_delta = Vector3::new(0.0, 0.0, 0.0);
 
                 if self.is_forward_pressed
                 {
@@ -226,10 +257,28 @@ impl Controller
                 {
                         delta -= up * self.speed;
                 }
+                if self.is_yaw_left
+                {
+                        rot_delta -= right * self.speed;
+                }
+                if self.is_yaw_right
+                {
+                        rot_delta += right * self.speed;
+                }
+                if self.is_pitch_up
+                {
+                        rot_delta -= up * self.speed;
+                }
+                if self.is_pitch_down
+                {
+                        rot_delta += up * self.speed;
+                }
 
-                // Move both eye and target so direction stays constant
                 camera.eye += delta;
-                camera.target += delta;
+
+                camera.target += rot_delta;
+
+                log::info!("Target: {:?}, Eye: {:?}", camera.target, camera.eye);
         }
 }
 

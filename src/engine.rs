@@ -1,0 +1,1065 @@
+//! Oxide Engine Module
+//!
+//! This module provides the core engine functionality for Oxide, including:
+//! - Engine construction via [`EngineBuilder`]
+//! - Engine lifecycle management through [`EngineRunner`]
+//! - User-defined setup via the [`EngineHandler`] trait
+//! - Platform-agnostic entry points for native and WASM targets
+//!
+//! # Key Concepts
+//!
+//! ## Singleton Engine
+//! Only one engine instance is allowed per process. Attempting to create
+//! multiple instances will result in a panic. This simplifies GPU resource
+//! management and event loop handling.
+//!
+//! ## EngineHandler
+//! Users define their engine behavior by implementing [`EngineHandler`]
+//! and providing a static `setup` function that returns an [`EngineRunner`].
+//! This setup function is registered internally and later executed by [`run`].
+//!
+//! ## Platform Differences
+//! - **Native targets**: `run::<H>()` registers the setup function and
+//!   immediately starts the engine loop.
+//! - **WASM targets**: [`run_wasm`] is automatically called when the WASM
+//!   module is loaded. Users should define the engine in Rust via
+//!   [`EngineHandler`] and rely on the WASM entry point for execution.
+//!
+//! # Usage
+//!
+//! ```rust
+//! use oxide::engine::EngineHandler;
+//!
+//! struct App;
+//!
+//! impl EngineHandler for App
+//! {
+//!         fn setup() -> oxide::engine::EngineRunner
+//!         {
+//!                 let engine = oxide::engine::EngineBuilder::new().build().unwrap();
+//!
+//!                 oxide::engine::EngineRunner::new(engine).unwrap()
+//!         }
+//! }
+//! ```
+//!
+//! On WASM, the same `App` setup is used, but the engine starts automatically
+//! when the module is loaded in the browser.
+
+use std::{
+        collections::HashMap,
+        sync::{Arc, OnceLock},
+};
+use wgpu::Features;
+#[cfg(target_arch = "wasm32")]
+use winit::platform::web::EventLoopExtWebSys;
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+use winit::{
+        application::ApplicationHandler,
+        event::{KeyEvent, WindowEvent},
+        event_loop::{ActiveEventLoop, EventLoop},
+        keyboard::{KeyCode, PhysicalKey},
+        window::WindowId,
+};
+use winit::window::Window;
+use crate::{ renderer::pipeline::PipelineManager, resource::Resources};
+use crate::app::App;
+use crate::state::State;
+
+// Engine manages a global setup function
+static SETUP_FN: OnceLock<fn() -> EngineRunner> = OnceLock::new();
+
+fn register_setup<H: EngineHandler>()
+{
+        SETUP_FN.set(H::setup)
+                .expect("OxideEngine: Setup function already registered");
+}
+
+/// A user-defined handler for your application.
+///
+/// # Overview
+///
+/// The [`EngineHandler`] trait allows you to define how your application
+/// initializes the engine. It exposes a single required function:
+/// [`EngineHandler::setup`]. This function is **static** (does not take
+/// `&self`) so it can be safely called in WebAssembly environments, where a
+/// plain function pointer is often required by the runtime (e.g.,
+/// `wasm-bindgen` startup).
+///
+/// Implementors of this trait typically build the engine through
+/// [`EngineBuilder`](crate::engine::EngineBuilder), then wrap it into an
+/// [`EngineRunner`](crate::engine::EngineRunner).
+///
+/// # Example
+///
+/// ```
+/// use oxide::engine::{EngineHandler, EngineBuilder, EngineRunner};
+///
+/// struct App;
+///
+/// impl EngineHandler for App
+/// {
+///        fn setup() -> oxide::engine::EngineRunner
+///        {
+///                log::info!("Setting up engine!");
+///
+///                let engine = oxide::engine::EngineBuilder::new().build().unwrap();
+///
+///                oxide::engine::EngineRunner::new(engine).unwrap()
+///        }
+/// }
+/// ```
+pub trait EngineHandler
+{
+        /// Called exactly once to build and return the engine runner.
+        ///
+        /// This is a **static function** instead of `&mut self` because:
+        /// - It must be callable from platform entrypoints (native and WASM).
+        /// - It does not depend on instance state: the engine setup is global.
+        ///
+        /// # Returns
+        ///
+        /// An [`EngineRunner`](crate::engine::EngineRunner) instance that
+        /// drives the engine loop.
+        fn setup() -> EngineRunner;
+}
+
+/// Starts the engine by invoking the registered setup function
+/// and running the returned [`EngineRunner`].
+///
+/// This function is platform-agnostic, but only executes on
+/// **native targets** (`not wasm32`). On WebAssembly targets,
+/// [`run_wasm`] is the entry point, which internally calls this function.
+///
+/// # Panics
+/// - If no setup function has been registered via [`run`] or
+///   [`register_setup`], this function will panic.
+/// - If the underlying [`EngineRunner::run`] call fails, it will panic.
+///
+/// # Notes
+/// - `start` is intentionally split from [`run`] so that both native and wasm
+///   entry points can share the same logic.
+/// - On wasm, [`run_wasm`] calls this function after the environment is
+///   initialized.
+///
+/// # Examples
+/// ```ignore
+/// // Normally not called directly by user code.
+/// run::<MyApp>(); // internally calls start()
+/// ```
+
+
+/// WebAssembly entry point for the engine runtime.
+///
+/// This function is automatically called by the browser when
+/// the WebAssembly module is initialized, thanks to the
+/// [`wasm_bindgen(start)`] attribute.
+///
+/// It sets up a panic hook for better error reporting in the browser,
+/// then delegates to [`start`] to perform the normal setup and run cycle.
+///
+/// # Errors
+/// Returns a [`JsValue`] if initialization fails, though in practice
+/// most errors will already result in a panic being reported to the console.
+///
+/// # Notes
+/// - This function replaces `main` on wasm targets.
+/// - It is important that `fn setup() -> EngineRunner` is declared statically
+///   in the handler type, since it must be accessible without instance state.
+///
+/// # Examples
+/// ```ignore
+/// // No need to call this manually. The browser automatically
+/// // invokes `run_wasm` when the wasm module loads.
+/// ```
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(start)]
+pub fn run_wasm() -> Result<(), JsValue>
+{
+        console_error_panic_hook::set_once();
+
+        run(); // <-- calls a statically defined fn
+
+        Ok(())
+}
+
+use crate::geometry::mesh::Mesh;
+use crate::geometry::vertex::Vertex;
+use crate::utils::exit::get_exit_message;
+
+pub const PENTAGON: &[Vertex] = &[
+        Vertex {
+                position: [-0.0868241, 0.49240386, 0.0],
+                tex_coords: [0.4131759, 0.00759614],
+        }, // A
+        Vertex {
+                position: [-0.49513406, 0.06958647, 0.0],
+                tex_coords: [0.0048659444, 0.43041354],
+        }, // B
+        Vertex {
+                position: [-0.21918549, -0.44939706, 0.0],
+                tex_coords: [0.28081453, 0.949397],
+        }, // C
+        Vertex {
+                position: [0.35966998, -0.3473291, 0.0],
+                tex_coords: [0.85967, 0.84732914],
+        }, // D
+        Vertex {
+                position: [0.44147372, 0.2347359, 0.0],
+                tex_coords: [0.9414737, 0.2652641],
+        }, // E
+];
+
+pub const P_INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+
+pub const MESH: Mesh = Mesh {
+        vertices: PENTAGON,
+        indices: P_INDICES,
+};
+
+pub fn run() -> anyhow::Result<()>
+{
+        crate::utils::bootstrap::config_logging();
+
+        crate::utils::bootstrap::show_start_message();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+                let msg = get_exit_message();
+
+                log::info!("{msg}");
+        }
+
+        let mut engine = crate::engine::EngineBuilder::new().build().unwrap();
+
+        engine.add_mesh("Pentagon", MESH);
+
+        let runner = crate::engine::EngineRunner::new(engine)?;
+
+        runner.run().unwrap();
+
+        Ok(())
+}
+
+/// Runner for the [`Engine`].
+pub struct EngineRunner
+{
+        pub engine: Option<Engine>,
+
+        pub event_loop: EventLoop<EngineState>,
+}
+
+impl EngineRunner
+{
+        /// Constructor for [`EnginerRunner`].
+        ///
+        /// Most importantly, it creates the `event_loop` from
+        /// `winit::EventLoop`.
+        ///
+        /// # Returns
+        ///
+        /// `anyhow::Result<EngineRunner>`.
+        pub fn new(mut engine: Engine) -> anyhow::Result<Self>
+        {
+                let event_loop: EventLoop<EngineState> = winit::event_loop::EventLoop::with_user_event().build()?;
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                        engine.proxy = Some(event_loop.create_proxy());
+                }
+
+                Ok(Self {
+                        engine: Some(engine),
+                        event_loop,
+                })
+        }
+
+        /// Runner for [`EngineRunner`].
+        ///
+        /// Executes the `run_app()` function of `winit::EventLoop`.
+        ///
+        /// Checks if the [`Engine`] is defined.
+        ///
+        /// # Returns
+        ///
+        /// `anyhow::Result<()>`. because `run_app()` returns a Result.
+        pub fn run(self) -> anyhow::Result<()>
+        {
+                let mut engine = match self.engine
+                {
+                        Some(e) => e,
+                        None => anyhow::bail!("Engine doesn't exist."),
+                };
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                        let mut engine = Box::leak(Box::new(engine));
+
+                        self.event_loop.spawn_app(engine);
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                self.event_loop.run_app(&mut engine)?;
+
+                Ok(())
+        }
+}
+
+/// Main entrypoint of Oxide.
+///
+/// To construct [`Engine`], use [`EngineBuilder`].
+///
+/// [Engine] is responsible for the lifetime,
+/// event handling and destruction of itself.
+///
+/// Every field is **Optional**.
+#[derive(Debug)]
+pub struct Engine
+{
+        /// On browser environments, an [`EventLoopProxy`] is needed
+        /// to send events back into the event loop asynchronously.
+        #[cfg(target_arch = "wasm32")]
+        pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
+
+        // --- Core Context ---
+        /// The OS/Browser window for rendering and input handling.
+        pub window: Option<Arc<winit::window::Window>>,
+
+        /// `wgpu` internals.
+        pub state: Option<EngineState>,
+
+        // --- Timing ---
+        /// The timestamp of the last frame, used for delta time calculations.
+        pub time: Option<std::time::Instant>,
+
+        // --- Rendering ---
+        /// Context for rendering, may contain pipelines, passes, and resources.
+        pub render_ctx: Option<crate::renderer::RenderContext>,
+
+        // --- Scene / Resources ---
+        /// The active scene graph or world being rendered and updated.
+        pub scene: Option<crate::scene::Scene>,
+
+        pub resources: Resources,
+
+        /// The main camera used to view the scene.
+        pub camera: Option<crate::scene::camera::Camera>,
+
+        // --- Misc ---
+        /// Input system state (keyboard, mouse, gamepad, etc.).
+        pub input: Option<crate::input::InputState>,
+
+        /// Optional UI system (e.g., egui) for rendering overlays.
+        pub ui: Option<crate::ui::UiSystem>,
+}
+
+impl Engine
+{
+        pub fn add_mesh(
+                &mut self,
+                name: &str,
+                mesh: Mesh,
+        )
+        {
+                self.resources.meshes.insert(name.to_string(), mesh);
+        }
+
+        pub fn render(&mut self) -> anyhow::Result<(), wgpu::SurfaceError>
+        {
+                let state = self.state.as_mut().unwrap();
+
+                self.window.clone().unwrap().request_redraw();
+
+                if !state.is_surface_configured {
+                        return Ok(())
+                }
+
+                // Get the surface texture ONCE per frame
+                let output = match state.surface.get_current_texture()
+                {
+                        Ok(frame) => frame,
+                        Err(wgpu::SurfaceError::Outdated) =>
+                                {
+                                        // This often happens during window resizing
+                                        println!("wgpu surface outdated");
+                                        return Err(wgpu::SurfaceError::Outdated);
+                                }
+                        Err(e) =>
+                                {
+                                        eprintln!("Failed to acquire surface texture: {:?}", e);
+                                        return Err(e);
+                                }
+                };
+
+                let view = output
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                let mut encoder =
+                    state.device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                label: Some("Main Render Encoder"),
+                        });
+
+                // 1. First render the background
+                // Diabolical levels of indentation.
+                {
+                        let mut render_pass =
+                            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                    label: Some("Background Pass"),
+                                    color_attachments: &[Some(
+                                            wgpu::RenderPassColorAttachment {
+                                                    view: &view,
+                                                    resolve_target: None,
+                                                    ops: wgpu::Operations {
+                                                            load: wgpu::LoadOp::Clear(
+                                                                    wgpu::Color {
+                                                                            r: 1.0,
+                                                                            g: 0.0,
+                                                                            b: 0.0,
+                                                                            a: 1.0,
+                                                                    },
+                                                            ),
+                                                            store: wgpu::StoreOp::Store,
+                                                    },
+                                            },
+                                    )],
+                                    depth_stencil_attachment: None,
+                                    occlusion_query_set: None,
+                                    timestamp_writes: None,
+                            });
+
+
+
+                        for (k, v) in &self.resources.meshes
+                        {
+                                state.vertex_buffers.push(v.new_vertex_buffer(&state.device));
+                                state.index_buffers.push(v.new_index_buffer(&state.device));
+                        }
+
+
+                        render_pass.set_pipeline(&state.render_pipeline);
+
+                        let pentagon = self.resources.meshes.get("Pentagon").unwrap();
+
+                        render_pass.set_vertex_buffer(0, state.vertex_buffers.get(0).unwrap().slice(..));
+
+                        render_pass.set_index_buffer(
+                                state.index_buffers.get(0).unwrap().slice(..),
+                                wgpu::IndexFormat::Uint16,
+                        );
+
+                        render_pass.draw(
+                                0..pentagon.get_num_vertices(),
+                                0..1,
+                        );
+                }
+
+                state.queue.submit(std::iter::once(encoder.finish()));
+
+                output.present();
+
+                Ok(())
+        }
+
+
+
+        /// Handles window resize events.
+        ///
+        /// # Parameters
+        /// - `width`: New window width in pixels
+        /// - `height`: New window height in pixels
+        pub fn resize(
+                &mut self,
+                width: u32,
+                height: u32,
+        )
+        {
+                if width == 0 || height == 0
+                {
+                        return;
+                }
+
+                let state = &mut self.state.as_mut().unwrap();
+
+                // Clamping to max dim to prevent panic!
+                let max_dim = state.device.limits().max_texture_dimension_2d;
+                let final_width = width.min(max_dim);
+                let final_height = height.min(max_dim);
+
+                //log::info!("Resizing surface -> width: {}, height: {}", final_width,
+                // final_height);
+
+                state.surface_configuration.width = final_width;
+                state.surface_configuration.height = final_height;
+
+                state.surface.configure(&state.device, &state.surface_configuration);
+
+
+                state.is_surface_configured = true;
+        }
+}
+
+/// EngineState holds all GPU-related resources for rendering.
+///
+/// # Notes
+/// - This struct is initialized during engine setup and assumes a persistent
+///   window.
+/// - The GPU device and queue are used for submitting rendering commands.
+/// - The surface and its configuration must match the window's size and format.
+///
+/// # Panics
+/// This function will panic if:
+/// - Creating the surface fails.
+/// - Selecting an adapter fails.
+/// - Creating the device and queue fails.
+#[derive(Debug)]
+pub struct EngineState
+{
+        pub is_surface_configured: bool,
+
+        /// The rendering surface tied to the window.
+        pub surface: wgpu::Surface<'static>,
+
+        /// The handle to a physical graphics device.
+        pub adapter: wgpu::Adapter,
+
+        /// The GPU device handle used to submit rendering commands.
+        pub device: wgpu::Device,
+
+        /// The GPU queue used to execute command buffers.
+        pub queue: wgpu::Queue,
+
+        pub surface_configuration: wgpu::SurfaceConfiguration,
+
+        pub texture_format: wgpu::TextureFormat,
+
+        pub surface_caps: wgpu::SurfaceCapabilities,
+
+        pub vertex_buffers: Vec<wgpu::Buffer>,
+
+        pub index_buffers: Vec<wgpu::Buffer>,
+
+        pub render_pipeline: wgpu::RenderPipeline,
+}
+
+
+
+impl EngineState
+{
+        /// Creates a new EngineState by initializing the surface, adapter,
+        /// device, and queue.
+        ///
+        /// # Parameters
+        /// - `instance`: WGPU instance to create surfaces and request adapters.
+        /// - `window`: The window to render to. Must outlive the EngineState.
+        ///
+        /// # Panics
+        /// Panics if surface creation, adapter selection, or device/queue
+        /// creation fails.
+        pub async fn new(
+                window: Arc<winit::window::Window>,
+        ) -> anyhow::Result<EngineState>
+        {
+                let instance = EngineBuilder::instance();
+
+                let size = window.inner_size();
+
+                let surface = instance.create_surface(window.clone()).unwrap();
+
+                let adapter = EngineBuilder::adapter(&instance, window.clone()).await.unwrap();
+
+                let (device, queue) = EngineBuilder::device_queue(&adapter).await.unwrap();
+
+                let surface_caps = surface.get_capabilities(&adapter);
+
+                let texture_format = EngineBuilder::texture_format(&surface_caps);
+
+                let surface_configuration =
+                        EngineBuilder::surface_configuration(texture_format, &size, &surface_caps);
+
+                let depth_texture = crate::texture::Texture::create_depth_texture(
+                        &device,
+                        &surface_configuration,
+                        "depth_texture",
+                );
+
+                let render_pipeline =
+                        PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
+
+                Ok(EngineState {
+                        is_surface_configured: false,
+                        surface,
+                        adapter,
+                        device,
+                        queue,
+                        surface_caps,
+                        texture_format,
+                        surface_configuration,
+                        render_pipeline: render_pipeline.render_pipeline,
+                        index_buffers: vec![],
+                        vertex_buffers: vec![],
+                })
+        }
+}
+
+impl ApplicationHandler<EngineState> for Engine
+{
+        /// Handles custom user events.
+        ///
+        /// On WASM, async initialization sends the completed [`State`] via a
+        /// proxy, which is received here and stored.
+        fn user_event(
+                &mut self,
+                _event_loop: &ActiveEventLoop,
+                event: EngineState,
+        )
+        {
+                #[cfg(target_arch = "wasm32")]
+                {
+                        self.window.clone().expect("Window doesn't exist.").request_redraw();
+
+                        web_sys::console::log_1(&"user_event fired".into());
+                }
+
+                self.state = Some(event);
+        }
+
+        fn resumed(
+                &mut self,
+                event_loop: &winit::event_loop::ActiveEventLoop,
+        )
+        {
+                // From the winit docs:
+                //
+                // # Portability
+                //
+                // It’s recommended that applications should only initialize their
+                // graphics context and create a window after they have received their first
+                // Resumed event. Some systems (specifically Android) won’t allow applications
+                // to create a render surface until they are resumed.
+                //
+                // Reference: https://docs.rs/winit/latest/winit/application/trait.ApplicationHandler.html#tymethod.resumed
+                //
+
+                if self.state.is_some()
+                {
+                        log::info!("Engine already resumed, skipping initialization.");
+                        return;
+                }
+
+                #[allow(unused_mut)]
+                let mut window_attributes =
+                    Window::default_attributes().with_title("Oxide Render Engine");
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                        use wasm_bindgen::JsCast;
+                        use winit::platform::web::WindowAttributesExtWebSys;
+
+                        const CANVAS_ID: &str = "canvas";
+
+                        let window = wgpu::web_sys::window().unwrap_throw();
+                        let document = window.document().unwrap_throw();
+                        let canvas = document.get_element_by_id(CANVAS_ID).unwrap_throw();
+                        let html_canvas_element = canvas.unchecked_into();
+
+                        window_attributes =
+                            window_attributes.with_canvas(Some(html_canvas_element));
+                }
+
+                let window = Arc::new(
+                        event_loop
+                            .create_window(window_attributes)
+                            .unwrap(),
+                );
+
+                self.window = Some(window.clone());
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                        // Native builds can block on async state initialization.
+                        self.state = Some(pollster::block_on(EngineState::new(window)).unwrap());
+                }
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                        // In WASM builds, async tasks must be spawned without blocking.
+                        #[cfg(target_arch = "wasm32")]
+                        if let Some(proxy) = self.proxy.take() {
+                                wasm_bindgen_futures::spawn_local(async move {
+                                        let state_result = EngineState::new(window).await;
+                                        match state_result {
+                                                Ok(state) => {
+                                                        web_sys::console::log_1(&"State initialized, sending event".into());
+                                                        assert!(proxy.send_event(state).is_ok());
+                                                },
+                                                Err(e) => web_sys::console::error_1(&format!("State init failed: {:?}", e).into()),
+                                        }
+                                });
+                        } else {
+                                web_sys::console::log_1(&"Proxy is None, skipping async init".into());
+                        }
+
+                }
+        }
+
+        fn window_event(
+                &mut self,
+                event_loop: &ActiveEventLoop,
+                #[allow(unused_variables)] id: WindowId,
+                event: WindowEvent,
+        )
+        {
+                match event
+                {
+                        WindowEvent::CloseRequested =>
+                        {
+                                println!("The close button was pressed; stopping");
+                                event_loop.exit();
+                        }
+                        WindowEvent::Resized(size) =>
+                        {
+                                self.resize(size.width, size.height);
+                        }
+                        WindowEvent::RedrawRequested =>
+                        {
+                                match self.render()
+                                {
+                                        Ok(_) =>
+                                                {}
+                                        // Reconfigure the surface if it's lost or outdated
+                                        Err(
+                                                wgpu::SurfaceError::Lost
+                                                | wgpu::SurfaceError::Outdated,
+                                        ) =>
+                                                {
+                                                }
+                                        Err(e) =>
+                                                {
+                                                        log::error!("Unable to render {}", e);
+                                                }
+                                }
+                        }
+                        WindowEvent::KeyboardInput {
+                                event:
+                                        KeyEvent {
+                                                physical_key: PhysicalKey::Code(code),
+                                                state: key_state,
+                                                ..
+                                        },
+                                ..
+                        } =>
+                        {
+                                println!("Code: {:?}, KeyState: {:?}", code, key_state);
+
+                                if code == KeyCode::Escape
+                                {
+                                        event_loop.exit();
+                                }
+                        }
+                        _ => (),
+                }
+        }
+}
+
+/// A builder for the engine, responsible for preparing configuration
+/// and state before GPU resources are initialized.
+///
+/// # Important
+///
+/// Calling [`EngineBuilder::new`] or similar methods like
+/// [`EngineBuilder::build`] does **not** immediately create a
+/// fully usable [`Engine`].
+///
+/// These methods prepare an internal [`EngineState`] that is only
+/// finalized when the application lifecycle reaches
+/// [`ApplicationHandler::resumed`]. Some resources (e.g.,
+/// `wgpu::Surface`) require a live window handle, which is only
+/// available after `resumed()` is called.
+///
+/// In other words, constructing an `EngineBuilder` sets up everything
+/// that *can* be initialized ahead of time, while deferring
+/// GPU- and window-dependent setup until the first `resumed()` event.
+///
+/// ## Consequences
+/// - Do not expect a complete `Engine` immediately after builder methods.
+/// - GPU surface, device, and swapchain are created during `resumed()`.
+/// - After `resumed()` runs, the engine is fully initialized and ready to
+///   render.
+///
+/// # Example
+///
+/// ```rust
+/// use oxide::engine::{EngineBuilder, EngineRunner, Engine};
+///
+/// let engine: Engine = EngineBuilder::new()
+///     .build()
+///     .unwrap();
+///
+/// // EngineState is None initially.
+/// assert!(engine.state.is_none());
+///
+/// let runner: EngineRunner = EngineRunner::new(engine).unwrap();
+///
+/// // EngineState is still None.
+/// assert!(runner.engine.unwrap().state.is_none());
+///
+/// // Once run is called, EngineState is constructed.
+/// // runner.run().unwrap();
+/// ```
+#[derive(Debug)]
+pub struct EngineBuilder
+{
+        engine: Engine,
+}
+
+#[allow(clippy::new_without_default)]
+impl EngineBuilder
+{
+        /// Creates a new `EngineBuilder` with default configuration.
+        ///
+        /// # Returns
+        ///
+        /// `EngineBuilder`.
+        ///
+        /// See [`EngineBuilder`] for important notes on deferred
+        /// initialization.
+        pub fn new() -> Self
+        {
+                let resources = Resources::new();
+
+                Self {
+                        engine: Engine {
+                                #[cfg(target_arch = "wasm32")]
+                                proxy: None,
+                                resources,
+                                state: None,
+                                time: None,
+                                render_ctx: None,
+                                scene: None,
+                                camera: None,
+                                input: None,
+                                ui: None,
+                                window: None,
+                        },
+                }
+        }
+
+        pub fn keybind<F>(
+                self,
+                key_code: winit::keyboard::KeyCode,
+                f: F,
+        ) -> Self
+        where
+                F: FnOnce(winit::keyboard::KeyCode),
+        {
+                f(key_code);
+                self
+        }
+
+        /// Set the time (for delta timing)
+        pub fn with_time(
+                mut self,
+                time: std::time::Instant,
+        ) -> Self
+        {
+                self.engine.time = Some(time);
+                self
+        }
+
+        /// Set the renderer context
+        pub fn with_render_ctx(
+                mut self,
+                render_ctx: crate::renderer::RenderContext,
+        ) -> Self
+        {
+                self.engine.render_ctx = Some(render_ctx);
+                self
+        }
+
+        /// Set the scene
+        pub fn with_scene(
+                mut self,
+                scene: crate::scene::Scene,
+        ) -> Self
+        {
+                self.engine.scene = Some(scene);
+                self
+        }
+
+        /// Set the camera
+        pub fn with_camera(
+                mut self,
+                camera: crate::scene::camera::Camera,
+        ) -> Self
+        {
+                self.engine.camera = Some(camera);
+                self
+        }
+
+        /// Set the input system
+        pub fn with_input(
+                mut self,
+                input: crate::input::InputState,
+        ) -> Self
+        {
+                self.engine.input = Some(input);
+                self
+        }
+
+        /// Set the UI system
+        pub fn with_ui(
+                mut self,
+                ui: crate::ui::UiSystem,
+        ) -> Self
+        {
+                self.engine.ui = Some(ui);
+                self
+        }
+
+        /// Finally builds the [`Engine`].
+        ///
+        /// Does some fields validation.
+        ///
+        /// Generates the `wgpu::Instance` and sets the `instance` field.
+        ///
+        /// # Returns
+        ///
+        /// `anyhow::Result<Engine>`.
+        ///
+        /// See [`EngineBuilder`] for important notes on deferred
+        /// initialization.
+        pub fn build(self) -> anyhow::Result<Engine>
+        {
+                Ok(self.engine)
+        }
+
+        fn instance() -> wgpu::Instance
+        {
+                wgpu::Instance::new(&wgpu::InstanceDescriptor {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        backends: wgpu::Backends::PRIMARY,
+                        #[cfg(target_arch = "wasm32")]
+                        backends: wgpu::Backends::GL,
+                        ..Default::default()
+                })
+        }
+
+        fn surface<'a>(
+                instance: &wgpu::Instance,
+                window: Arc<winit::window::Window>,
+        ) -> anyhow::Result<wgpu::Surface<'a>, wgpu::CreateSurfaceError>
+        {
+                instance.create_surface(window)
+        }
+
+        async fn adapter(
+                instance: &wgpu::Instance,
+                window: Arc<winit::window::Window>,
+        ) -> anyhow::Result<wgpu::Adapter>
+        {
+                let surface = Self::surface(instance, window)?;
+
+                let adapter = instance
+                        .request_adapter(&wgpu::RequestAdapterOptions {
+                                // Either `HighPerformance` or `LowPower`.
+                                //
+                                // 1. LowPower will pick an adapter that favors battery life.
+                                //
+                                // 2. HighPerformance will pick an adapter for more power-hungry yet
+                                //    more performant GPU's, such as a dedicated graphics card.
+                                power_preference: wgpu::PowerPreference::HighPerformance,
+
+                                // Tells wgpu to find an adapter that can present to the supplied
+                                // surface.
+                                compatible_surface: Some(&surface),
+
+                                // Forces wgpu to pick an adapter that will work on all hardware.
+                                // Generally a software implementation on most systems.
+                                force_fallback_adapter: false,
+                        })
+                        .await
+                        .map_err(|e| anyhow::anyhow!(e))?;
+
+                Ok(adapter)
+        }
+
+        pub async fn device_queue(
+                adapter: &wgpu::Adapter
+        ) -> anyhow::Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>
+        {
+                adapter.request_device(&wgpu::DeviceDescriptor {
+                        label: None,
+                        required_features: Features::empty(),
+                        // WebGL doesn't support all of wgpu's features, so if
+                        // we're building for the web we'll have to disable some.
+                        // Describes the limit of certain types of resources that we can
+                        // create.
+                        //
+                        // Reference <https://gpuweb.github.io/gpuweb/#gpusupportedlimits>
+                        required_limits: if cfg!(target_arch = "wasm32")
+                        {
+                                wgpu::Limits::downlevel_webgl2_defaults()
+                        }
+                        else
+                        {
+                                wgpu::Limits::default()
+                        },
+
+                        // Provides the adapter with a preferred memory allocation strategy.
+                        memory_hints: Default::default(),
+
+                        // Debug tracing.
+                        trace: wgpu::Trace::Off,
+                })
+                    .await
+        }
+
+        fn texture_format(surface_caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat
+        {
+                surface_caps
+                        .formats
+                        .iter()
+                        .find(|f| f.is_srgb())
+                        .copied()
+                        .unwrap_or(surface_caps.formats[0])
+        }
+
+        fn surface_configuration(
+                surface_format: wgpu::TextureFormat,
+                size: &winit::dpi::PhysicalSize<u32>,
+                surface_caps: &wgpu::SurfaceCapabilities,
+        ) -> wgpu::SurfaceConfiguration
+        {
+                wgpu::SurfaceConfiguration {
+                        // Describes how SurfaceTextures will be used.
+                        // RENDER_ATTACHMET is guaranteed to be supported.
+                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+
+                        format: surface_format,
+
+                        width: size.width,
+
+                        height: size.height,
+
+                        #[cfg(target_arch = "wasm32")]
+                        present_mode: surface_caps.present_modes[0],
+
+                        // IMMEDIATE: No VSync for non wasm
+                        // environments, because wasm only has 1
+                        // present mode.
+                        #[cfg(not(target_arch = "wasm32"))]
+                        present_mode: surface_caps.present_modes[1],
+
+                        alpha_mode: surface_caps.alpha_modes[0],
+
+                        view_formats: vec![],
+
+                        desired_maximum_frame_latency: 2,
+                }
+        }
+}

@@ -2,13 +2,8 @@ use colored::*;
 
 use crate::utils::random::get_random_u128;
 
-pub fn get_exit_message(config: &crate::Config) -> String
+pub fn get_exit_message() -> String
 {
-        if !config.show_exit_message
-        {
-                return String::from("");
-        }
-
         let messages = [
                 ("Oxide has been reduced to its elemental components.", "red"),
                 ("Oxide underwent catastrophic reduction and ceased to exist.", "magenta"),
