@@ -339,7 +339,7 @@ pub struct Engine
         /// The active scene graph or world being rendered and updated.
         pub scene: Option<crate::scene::Scene>,
 
-        pub resources: Arc<Resources<'static>>,
+        pub resources: Resources,
 
         /// The main camera used to view the scene.
         pub camera: Option<crate::scene::camera::Camera>,
@@ -360,6 +360,7 @@ impl Engine
                 mesh: Mesh,
         )
         {
+                self.resources.meshes.insert(name.to_string(), mesh);
         }
 }
 
@@ -598,7 +599,7 @@ impl EngineBuilder
                         instance,
                 };
 
-                let resources = Arc::new(Resources::new());
+                let resources = Resources::new();
 
                 Self {
                         engine: Engine {

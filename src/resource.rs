@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use crate::geometry::mesh::Mesh;
 
 #[derive(Debug, Default)]
-pub struct Resources<'a>
+pub struct Resources
 {
-        pub meshes: HashMap<&'a str, Mesh<'a>>,
+        pub meshes: HashMap<String, Mesh>,
 }
 
-impl<'a> Resources<'a>
+impl Resources
 {
         pub fn new() -> Self
         {

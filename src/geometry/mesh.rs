@@ -1,8 +1,8 @@
 use crate::geometry::vertex::Vertex;
 
 #[derive(Debug)]
-pub struct Mesh<'a>
+pub struct Mesh
 {
-        pub vertices: &'a [Vertex],
-        pub indices: &'a [u16],
+        pub vertices: &'static [Vertex],
+        pub indices: &'static [u16],
 }
