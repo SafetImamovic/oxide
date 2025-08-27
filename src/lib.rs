@@ -6,6 +6,7 @@ pub mod geometry;
 pub mod gui;
 pub mod input;
 pub mod renderer;
+pub mod resource;
 pub mod scene;
 pub mod state;
 pub mod texture;

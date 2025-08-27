@@ -49,7 +49,10 @@
 //! On WASM, the same `App` setup is used, but the engine starts automatically
 //! when the module is loaded in the browser.
 
-use std::sync::{Arc, OnceLock};
+use std::{
+        collections::HashMap,
+        sync::{Arc, OnceLock},
+};
 
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
@@ -64,6 +67,8 @@ use winit::{
         keyboard::{KeyCode, PhysicalKey},
         window::WindowId,
 };
+
+use crate::{geometry::mesh::Mesh, resource::Resources};
 
 // Engine manages a global setup function
 static SETUP_FN: OnceLock<fn() -> EngineRunner> = OnceLock::new();
@@ -334,6 +339,8 @@ pub struct Engine
         /// The active scene graph or world being rendered and updated.
         pub scene: Option<crate::scene::Scene>,
 
+        pub resources: Arc<Resources<'static>>,
+
         /// The main camera used to view the scene.
         pub camera: Option<crate::scene::camera::Camera>,
 
@@ -343,6 +350,17 @@ pub struct Engine
 
         /// Optional UI system (e.g., egui) for rendering overlays.
         pub ui: Option<crate::ui::UiSystem>,
+}
+
+impl Engine
+{
+        pub fn add_mesh(
+                &mut self,
+                name: &str,
+                mesh: Mesh,
+        )
+        {
+        }
 }
 
 /// EngineState holds all GPU-related resources for rendering.
@@ -580,8 +598,11 @@ impl EngineBuilder
                         instance,
                 };
 
+                let resources = Arc::new(Resources::new());
+
                 Self {
                         engine: Engine {
+                                resources,
                                 core,
                                 state: None,
                                 time: None,
