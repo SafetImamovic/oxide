@@ -489,6 +489,8 @@ impl State
                         fovy: 45.0,
                         znear: 0.1,
                         zfar: 100.0,
+                        yaw: cgmath::Deg(0.0),
+                        pitch: cgmath::Deg(0.0),
                 };
 
                 let mut camera_uniform = crate::camera::CameraUniform::new();
@@ -600,7 +602,7 @@ impl State
         ///
         /// GPU ([`wgpu::Instance`]) is the entry point to `WebGPU`.
         /// Reference <https://gpuweb.github.io/gpuweb/#gpu-interface>
-        ///
+        //EngineState/
         /// Defined via [`wgpu::InstanceDecsriptor`], this represents Options
         /// for creating an instance. Reference <https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html>
         ///

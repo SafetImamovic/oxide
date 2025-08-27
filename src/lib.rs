@@ -1,10 +1,16 @@
 pub mod app;
 pub mod camera;
 pub mod config;
+pub mod engine;
 pub mod geometry;
 pub mod gui;
+pub mod input;
+pub mod renderer;
+pub mod resource;
+pub mod scene;
 pub mod state;
 pub mod texture;
+pub mod ui;
 pub mod utils;
 
 /// WebAssembly (WASM) architecture note:
@@ -46,7 +52,7 @@ pub fn run() -> anyhow::Result<()>
 
         let mut config = crate::utils::bootstrap::create_config();
 
-        crate::utils::bootstrap::show_start_message(&config);
+        crate::utils::bootstrap::show_start_message();
 
         #[allow(unused_mut)]
         let mut app = App::new(
@@ -67,24 +73,9 @@ pub fn run() -> anyhow::Result<()>
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-                let msg = get_exit_message(&app.config);
+                let msg = get_exit_message();
                 log::info!("{msg}");
         }
-
-        Ok(())
-}
-
-/// WASM entrypoint function.
-///
-/// This function is called automatically by the JavaScript glue code
-/// when the WASM module is loaded in the browser.
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(start)]
-pub fn run_web() -> Result<(), wasm_bindgen::JsValue>
-{
-        console_error_panic_hook::set_once();
-
-        run().unwrap_throw();
 
         Ok(())
 }
