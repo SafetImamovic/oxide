@@ -1443,6 +1443,7 @@ dependencies = [
  "getrandom",
  "image",
  "log",
+ "once_cell",
  "pollster",
  "serde",
  "toml",
