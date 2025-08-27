@@ -44,7 +44,7 @@ impl PipelineManager
                         vertex: wgpu::VertexState {
                                 module: &shader,
                                 entry_point: Some("vs_main"), // 1.
-                                buffers: &[vertex_buffer, crate::InstanceRaw::desc()], // 2.
+                                buffers: &[vertex_buffer], // 2.
                                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                         },
                         fragment: Some(wgpu::FragmentState {
@@ -72,13 +72,7 @@ impl PipelineManager
                                 conservative: false,
                                 unclipped_depth: false,
                         },
-                        depth_stencil: Some(wgpu::DepthStencilState {
-                                format: crate::texture::Texture::DEPTH_FORMAT,
-                                depth_write_enabled: true,
-                                depth_compare: wgpu::CompareFunction::Less,
-                                stencil: wgpu::StencilState::default(),
-                                bias: wgpu::DepthBiasState::default(),
-                        }), // 1.
+                        depth_stencil: None, // 1.
                         multisample: wgpu::MultisampleState {
                                 count: 1,                         // 2.
                                 mask: !0,                         // 3.

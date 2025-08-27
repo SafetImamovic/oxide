@@ -16,6 +16,11 @@ impl Mesh
                 self.indices.len() as u32
         }
 
+        pub fn get_num_vertices(&self) -> u32
+        {
+                self.vertices.len() as u32
+        }
+
         pub fn new_vertex_buffer(
                 &self,
                 device: &wgpu::Device,

@@ -362,6 +362,132 @@ impl Engine
         {
                 self.resources.meshes.insert(name.to_string(), mesh);
         }
+
+        pub fn render(&mut self) -> anyhow::Result<(), wgpu::SurfaceError>
+        {
+                let state = self.state.as_ref().unwrap();
+
+                self.window.clone().unwrap().request_redraw();
+
+                if !state.is_surface_configured {
+                        return Ok(())
+                }
+
+                // Get the surface texture ONCE per frame
+                let output = match state.surface.get_current_texture()
+                {
+                        Ok(frame) => frame,
+                        Err(wgpu::SurfaceError::Outdated) =>
+                                {
+                                        // This often happens during window resizing
+                                        println!("wgpu surface outdated");
+                                        return Err(wgpu::SurfaceError::Outdated);
+                                }
+                        Err(e) =>
+                                {
+                                        eprintln!("Failed to acquire surface texture: {:?}", e);
+                                        return Err(e);
+                                }
+                };
+
+                let view = output
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                let mut encoder =
+                    state.device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                label: Some("Main Render Encoder"),
+                        });
+
+                // 1. First render the background
+                // Diabolical levels of indentation.
+                {
+                        let mut render_pass =
+                            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                    label: Some("Background Pass"),
+                                    color_attachments: &[Some(
+                                            wgpu::RenderPassColorAttachment {
+                                                    view: &view,
+                                                    resolve_target: None,
+                                                    ops: wgpu::Operations {
+                                                            load: wgpu::LoadOp::Clear(
+                                                                    wgpu::Color {
+                                                                            r: 1.0,
+                                                                            g: 0.0,
+                                                                            b: 0.0,
+                                                                            a: 1.0,
+                                                                    },
+                                                            ),
+                                                            store: wgpu::StoreOp::Store,
+                                                    },
+                                            },
+                                    )],
+                                    depth_stencil_attachment: None,
+                                    occlusion_query_set: None,
+                                    timestamp_writes: None,
+                            });
+
+                        render_pass.set_pipeline(&state.render_pipeline);
+
+                        let pentagon = self.resources.meshes.get("Pentagon").unwrap();
+
+                        render_pass.set_vertex_buffer(0, state.vertex_buffers.get(0).unwrap().slice(..));
+
+                        render_pass.set_index_buffer(
+                                state.index_buffers.get(0).unwrap().slice(..),
+                                wgpu::IndexFormat::Uint16,
+                        );
+
+                        println!("{}", pentagon.get_num_vertices());
+
+                        render_pass.draw(
+                                0..pentagon.get_num_vertices(),
+                                0..1,
+                        );
+                }
+
+                state.queue.submit(std::iter::once(encoder.finish()));
+
+                output.present();
+
+                Ok(())
+        }
+
+        /// Handles window resize events.
+        ///
+        /// # Parameters
+        /// - `width`: New window width in pixels
+        /// - `height`: New window height in pixels
+        pub fn resize(
+                &mut self,
+                width: u32,
+                height: u32,
+        )
+        {
+                if width == 0 || height == 0
+                {
+                        return;
+                }
+
+                let state = &mut self.state.as_mut().unwrap();
+
+                // Clamping to max dim to prevent panic!
+                let max_dim = state.device.limits().max_texture_dimension_2d;
+                let final_width = width.min(max_dim);
+                let final_height = height.min(max_dim);
+
+                //log::info!("Resizing surface -> width: {}, height: {}", final_width,
+                // final_height);
+
+                state.surface_configuration.width = final_width;
+                state.surface_configuration.height = final_height;
+
+                state.surface.configure(&state.device, &state.surface_configuration);
+
+
+                state.is_surface_configured = true;
+        }
 }
 
 /// EngineState holds all GPU-related resources for rendering.
@@ -380,6 +506,8 @@ impl Engine
 #[derive(Debug)]
 pub struct EngineState
 {
+        pub is_surface_configured: bool,
+
         /// The rendering surface tied to the window.
         pub surface: wgpu::Surface<'static>,
 
@@ -455,6 +583,7 @@ impl EngineState
                         PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
 
                 EngineState {
+                        is_surface_configured: false,
                         surface,
                         adapter,
                         device,
@@ -527,9 +656,28 @@ impl ApplicationHandler for Engine
                                 println!("The close button was pressed; stopping");
                                 event_loop.exit();
                         }
+                        WindowEvent::Resized(size) =>
+                        {
+                                self.resize(size.width, size.height);
+                        }
                         WindowEvent::RedrawRequested =>
                         {
-                                self.window.as_ref().unwrap().request_redraw();
+                                match self.render()
+                                {
+                                        Ok(_) =>
+                                                {}
+                                        // Reconfigure the surface if it's lost or outdated
+                                        Err(
+                                                wgpu::SurfaceError::Lost
+                                                | wgpu::SurfaceError::Outdated,
+                                        ) =>
+                                                {
+                                                }
+                                        Err(e) =>
+                                                {
+                                                        log::error!("Unable to render {}", e);
+                                                }
+                                }
                         }
                         WindowEvent::KeyboardInput {
                                 event:
