@@ -166,6 +166,9 @@ impl Engine
                 self.resources.meshes.insert(name.to_string(), mesh);
         }
 
+
+
+
         pub fn render(&mut self) -> anyhow::Result<(), wgpu::SurfaceError>
         {
                 let state = self.state.as_mut().unwrap();
@@ -270,12 +273,52 @@ impl Engine
                 Ok(())
         }
 
+
+        fn resize(&mut self)
+        {
+                let state = match &mut self.state
+                {
+                        Some(canvas) => canvas,
+                        None => return,
+                };
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                        let (width, height) = Self::get_body_size().unwrap();
+                        self._resize(width, height);
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                        let size = self.window.as_ref().unwrap().inner_size();
+                        self._resize(size.width, size.height);
+                }
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        fn get_body_size() -> Option<(u32, u32)>
+        {
+                let window = web_sys::window()?;
+
+                let document = window.document()?;
+
+                let body = document.body()?;
+
+                let width = body.client_width() as u32;
+
+                let height = body.client_height() as u32;
+
+                log::info!("Body: {}, {}", width, height);
+
+                Some((width, height))
+        }
+
         /// Handles window resize events.
         ///
         /// # Parameters
         /// - `width`: New window width in pixels
         /// - `height`: New window height in pixels
-        pub fn resize(
+        fn _resize(
                 &mut self,
                 width: u32,
                 height: u32,
@@ -412,8 +455,6 @@ impl EngineState
 
                 let gui = GuiRenderer::new(&device, surface_configuration.format, None, 1, &window);
 
-
-
                 Ok(EngineState {
                         render_graph,
                         is_surface_configured: false,
@@ -545,8 +586,6 @@ impl ApplicationHandler<EngineState> for Engine
                                 );
                         }
                 }
-
-
         }
 
         fn window_event(
@@ -573,7 +612,7 @@ impl ApplicationHandler<EngineState> for Engine
                         }
                         WindowEvent::Resized(size) =>
                         {
-                                self.resize(size.width, size.height);
+                                self.resize();
                         }
                         WindowEvent::RedrawRequested =>
                         {
