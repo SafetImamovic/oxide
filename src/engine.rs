@@ -17,39 +17,8 @@
 //! Users define their engine behavior by implementing [`EngineHandler`]
 //! and providing a static `setup` function that returns an [`EngineRunner`].
 //! This setup function is registered internally and later executed by [`run`].
-//!
-//! ## Platform Differences
-//! - **Native targets**: `run::<H>()` registers the setup function and
-//!   immediately starts the engine loop.
-//! - **WASM targets**: [`run_wasm`] is automatically called when the WASM
-//!   module is loaded. Users should define the engine in Rust via
-//!   [`EngineHandler`] and rely on the WASM entry point for execution.
-//!
-//! # Usage
-//!
-//! ```rust
-//! use oxide::engine::EngineHandler;
-//!
-//! struct App;
-//!
-//! impl EngineHandler for App
-//! {
-//!         fn setup() -> oxide::engine::EngineRunner
-//!         {
-//!                 let engine = oxide::engine::EngineBuilder::new().build().unwrap();
-//!
-//!                 oxide::engine::EngineRunner::new(engine).unwrap()
-//!         }
-//! }
-//! ```
-//!
-//! On WASM, the same `App` setup is used, but the engine starts automatically
-//! when the module is loaded in the browser.
 
-use std::{
-        collections::HashMap,
-        sync::{Arc, OnceLock},
-};
+use std::sync::Arc;
 use wgpu::Features;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
@@ -57,11 +26,9 @@ use winit::platform::web::EventLoopExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::{
-        app::App,
-        renderer::graph::{RenderGraph, RenderPass},
-};
-use crate::{renderer::graph::BackgroundPass, state::State};
+use crate::geometry::mesh::Mesh;
+use crate::renderer::graph::BackgroundPass;
+use crate::renderer::graph::RenderGraph;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use winit::window::Window;
 use winit::{
@@ -71,180 +38,6 @@ use winit::{
         keyboard::{KeyCode, PhysicalKey},
         window::WindowId,
 };
-
-// Engine manages a global setup function
-static SETUP_FN: OnceLock<fn() -> EngineRunner> = OnceLock::new();
-
-fn register_setup<H: EngineHandler>()
-{
-        SETUP_FN.set(H::setup)
-                .expect("OxideEngine: Setup function already registered");
-}
-
-/// A user-defined handler for your application.
-///
-/// # Overview
-///
-/// The [`EngineHandler`] trait allows you to define how your application
-/// initializes the engine. It exposes a single required function:
-/// [`EngineHandler::setup`]. This function is **static** (does not take
-/// `&self`) so it can be safely called in WebAssembly environments, where a
-/// plain function pointer is often required by the runtime (e.g.,
-/// `wasm-bindgen` startup).
-///
-/// Implementors of this trait typically build the engine through
-/// [`EngineBuilder`](crate::engine::EngineBuilder), then wrap it into an
-/// [`EngineRunner`](crate::engine::EngineRunner).
-///
-/// # Example
-///
-/// ```
-/// use oxide::engine::{EngineHandler, EngineBuilder, EngineRunner};
-///
-/// struct App;
-///
-/// impl EngineHandler for App
-/// {
-///        fn setup() -> oxide::engine::EngineRunner
-///        {
-///                log::info!("Setting up engine!");
-///
-///                let engine = oxide::engine::EngineBuilder::new().build().unwrap();
-///
-///                oxide::engine::EngineRunner::new(engine).unwrap()
-///        }
-/// }
-/// ```
-pub trait EngineHandler
-{
-        /// Called exactly once to build and return the engine runner.
-        ///
-        /// This is a **static function** instead of `&mut self` because:
-        /// - It must be callable from platform entrypoints (native and WASM).
-        /// - It does not depend on instance state: the engine setup is global.
-        ///
-        /// # Returns
-        ///
-        /// An [`EngineRunner`](crate::engine::EngineRunner) instance that
-        /// drives the engine loop.
-        fn setup() -> EngineRunner;
-}
-
-/// Starts the engine by invoking the registered setup function
-/// and running the returned [`EngineRunner`].
-///
-/// This function is platform-agnostic, but only executes on
-/// **native targets** (`not wasm32`). On WebAssembly targets,
-/// [`run_wasm`] is the entry point, which internally calls this function.
-///
-/// # Panics
-/// - If no setup function has been registered via [`run`] or
-///   [`register_setup`], this function will panic.
-/// - If the underlying [`EngineRunner::run`] call fails, it will panic.
-///
-/// # Notes
-/// - `start` is intentionally split from [`run`] so that both native and wasm
-///   entry points can share the same logic.
-/// - On wasm, [`run_wasm`] calls this function after the environment is
-///   initialized.
-///
-/// # Examples
-/// ```ignore
-/// // Normally not called directly by user code.
-/// run::<MyApp>(); // internally calls start()
-/// ```
-
-/// WebAssembly entry point for the engine runtime.
-///
-/// This function is automatically called by the browser when
-/// the WebAssembly module is initialized, thanks to the
-/// [`wasm_bindgen(start)`] attribute.
-///
-/// It sets up a panic hook for better error reporting in the browser,
-/// then delegates to [`start`] to perform the normal setup and run cycle.
-///
-/// # Errors
-/// Returns a [`JsValue`] if initialization fails, though in practice
-/// most errors will already result in a panic being reported to the console.
-///
-/// # Notes
-/// - This function replaces `main` on wasm targets.
-/// - It is important that `fn setup() -> EngineRunner` is declared statically
-///   in the handler type, since it must be accessible without instance state.
-///
-/// # Examples
-/// ```ignore
-/// // No need to call this manually. The browser automatically
-/// // invokes `run_wasm` when the wasm module loads.
-/// ```
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(start)]
-pub fn run_wasm() -> Result<(), JsValue>
-{
-        console_error_panic_hook::set_once();
-
-        run(); // <-- calls a statically defined fn
-
-        Ok(())
-}
-
-use crate::geometry::mesh::Mesh;
-use crate::geometry::vertex::Vertex;
-use crate::utils::exit::get_exit_message;
-
-pub const PENTAGON: &[Vertex] = &[
-        Vertex {
-                position: [-0.0868241, 0.49240386, 0.0],
-                tex_coords: [0.4131759, 0.00759614],
-        }, // A
-        Vertex {
-                position: [-0.49513406, 0.06958647, 0.0],
-                tex_coords: [0.0048659444, 0.43041354],
-        }, // B
-        Vertex {
-                position: [-0.21918549, -0.44939706, 0.0],
-                tex_coords: [0.28081453, 0.949397],
-        }, // C
-        Vertex {
-                position: [0.35966998, -0.3473291, 0.0],
-                tex_coords: [0.85967, 0.84732914],
-        }, // D
-        Vertex {
-                position: [0.44147372, 0.2347359, 0.0],
-                tex_coords: [0.9414737, 0.2652641],
-        }, // E
-];
-
-pub const P_INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
-
-pub const MESH: Mesh = Mesh {
-        vertices: PENTAGON,
-        indices: P_INDICES,
-};
-
-pub fn run() -> anyhow::Result<()>
-{
-        crate::utils::bootstrap::config_logging();
-
-        crate::utils::bootstrap::show_start_message();
-
-        let mut engine = crate::engine::EngineBuilder::new().build().unwrap();
-
-        engine.add_mesh("Pentagon", MESH);
-
-        let runner = crate::engine::EngineRunner::new(engine)?;
-
-        runner.run()?;
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-                let msg = get_exit_message();
-
-                log::info!("{msg}");
-        }
-
-        Ok(())
-}
 
 /// Runner for the [`Engine`].
 pub struct EngineRunner
