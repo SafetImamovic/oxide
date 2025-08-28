@@ -249,9 +249,9 @@ impl GuiRenderer
         }
 
         #[cfg(target_arch = "wasm32")]
-        pub fn current_pixels_per_point(&self, window: &winit::window::Window) -> f32
+        pub fn current_pixels_per_point(&self, window: &winit::window::Window, ui_scale: &mut f32) -> f32
         {
-                web_sys::window().unwrap().device_pixel_ratio() as f32 * self.ui_scale
+                web_sys::window().unwrap().device_pixel_ratio() as f32 * *ui_scale
         }
 
         #[cfg(not(target_arch = "wasm32"))]
