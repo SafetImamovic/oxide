@@ -57,6 +57,13 @@ use winit::platform::web::EventLoopExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+use crate::{
+        app::App,
+        renderer::graph::{RenderGraph, RenderPass},
+};
+use crate::{renderer::graph::BackgroundPass, state::State};
+use crate::{renderer::pipeline::PipelineManager, resource::Resources};
+use winit::window::Window;
 use winit::{
         application::ApplicationHandler,
         event::{KeyEvent, WindowEvent},
@@ -64,10 +71,6 @@ use winit::{
         keyboard::{KeyCode, PhysicalKey},
         window::WindowId,
 };
-use winit::window::Window;
-use crate::{ renderer::pipeline::PipelineManager, resource::Resources};
-use crate::app::App;
-use crate::state::State;
 
 // Engine manages a global setup function
 static SETUP_FN: OnceLock<fn() -> EngineRunner> = OnceLock::new();
@@ -150,7 +153,6 @@ pub trait EngineHandler
 /// // Normally not called directly by user code.
 /// run::<MyApp>(); // internally calls start()
 /// ```
-
 
 /// WebAssembly entry point for the engine runtime.
 ///
@@ -264,7 +266,8 @@ impl EngineRunner
         /// `anyhow::Result<EngineRunner>`.
         pub fn new(mut engine: Engine) -> anyhow::Result<Self>
         {
-                let event_loop: EventLoop<EngineState> = winit::event_loop::EventLoop::with_user_event().build()?;
+                let event_loop: EventLoop<EngineState> =
+                        winit::event_loop::EventLoop::with_user_event().build()?;
 
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -324,6 +327,8 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
+        pub render_graph: RenderGraph,
+
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
         pub window: Option<Arc<winit::window::Window>>,
@@ -373,8 +378,9 @@ impl Engine
 
                 self.window.clone().unwrap().request_redraw();
 
-                if !state.is_surface_configured {
-                        return Ok(())
+                if !state.is_surface_configured
+                {
+                        return Ok(());
                 }
 
                 // Get the surface texture ONCE per frame
@@ -382,80 +388,70 @@ impl Engine
                 {
                         Ok(frame) => frame,
                         Err(wgpu::SurfaceError::Outdated) =>
-                                {
-                                        // This often happens during window resizing
-                                        println!("wgpu surface outdated");
-                                        return Err(wgpu::SurfaceError::Outdated);
-                                }
+                        {
+                                // This often happens during window resizing
+                                println!("wgpu surface outdated");
+                                return Err(wgpu::SurfaceError::Outdated);
+                        }
                         Err(e) =>
-                                {
-                                        eprintln!("Failed to acquire surface texture: {:?}", e);
-                                        return Err(e);
-                                }
+                        {
+                                eprintln!("Failed to acquire surface texture: {:?}", e);
+                                return Err(e);
+                        }
                 };
 
                 let view = output
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
 
                 let mut encoder =
-                    state.device
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                label: Some("Main Render Encoder"),
-                        });
+                        state.device
+                                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                        label: Some("Main Render Encoder"),
+                                });
 
-                // 1. First render the background
+                let mut bg_pass = BackgroundPass {
+                        name: "bg_pass".to_string(),
+                        enabled: true,
+                        clear_color: wgpu::Color {
+                                r: 0.15,
+                                g: 0.15,
+                                b: 0.15,
+                                a: 1.0,
+                        },
+                        pipeline: state.render_pipeline.clone(),
+                };
+
+                self.render_graph.add_pass(Box::new(bg_pass));
+
+                self.render_graph.execute(&view, &mut encoder);
+
                 // Diabolical levels of indentation.
                 {
-                        let mut render_pass =
-                            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                    label: Some("Background Pass"),
-                                    color_attachments: &[Some(
-                                            wgpu::RenderPassColorAttachment {
-                                                    view: &view,
-                                                    resolve_target: None,
-                                                    ops: wgpu::Operations {
-                                                            load: wgpu::LoadOp::Clear(
-                                                                    wgpu::Color {
-                                                                            r: 1.0,
-                                                                            g: 0.0,
-                                                                            b: 0.0,
-                                                                            a: 1.0,
-                                                                    },
-                                                            ),
-                                                            store: wgpu::StoreOp::Store,
-                                                    },
-                                            },
-                                    )],
-                                    depth_stencil_attachment: None,
-                                    occlusion_query_set: None,
-                                    timestamp_writes: None,
-                            });
 
-
-
+                        /*
                         for (k, v) in &self.resources.meshes
                         {
-                                state.vertex_buffers.push(v.new_vertex_buffer(&state.device));
+                                state.vertex_buffers
+                                        .push(v.new_vertex_buffer(&state.device));
                                 state.index_buffers.push(v.new_index_buffer(&state.device));
                         }
 
-
-                        render_pass.set_pipeline(&state.render_pipeline);
-
                         let pentagon = self.resources.meshes.get("Pentagon").unwrap();
 
-                        render_pass.set_vertex_buffer(0, state.vertex_buffers.get(0).unwrap().slice(..));
+                        render_pass.set_vertex_buffer(
+                                0,
+                                state.vertex_buffers.get(0).unwrap().slice(..),
+                        );
 
                         render_pass.set_index_buffer(
                                 state.index_buffers.get(0).unwrap().slice(..),
                                 wgpu::IndexFormat::Uint16,
                         );
 
-                        render_pass.draw(
-                                0..pentagon.get_num_vertices(),
-                                0..1,
-                        );
+
+                        render_pass.draw(0..pentagon.get_num_vertices(), 0..1);
+                        */
                 }
 
                 state.queue.submit(std::iter::once(encoder.finish()));
@@ -464,8 +460,6 @@ impl Engine
 
                 Ok(())
         }
-
-
 
         /// Handles window resize events.
         ///
@@ -496,8 +490,8 @@ impl Engine
                 state.surface_configuration.width = final_width;
                 state.surface_configuration.height = final_height;
 
-                state.surface.configure(&state.device, &state.surface_configuration);
-
+                state.surface
+                        .configure(&state.device, &state.surface_configuration);
 
                 state.is_surface_configured = true;
         }
@@ -546,8 +540,6 @@ pub struct EngineState
         pub render_pipeline: wgpu::RenderPipeline,
 }
 
-
-
 impl EngineState
 {
         /// Creates a new EngineState by initializing the surface, adapter,
@@ -560,9 +552,7 @@ impl EngineState
         /// # Panics
         /// Panics if surface creation, adapter selection, or device/queue
         /// creation fails.
-        pub async fn new(
-                window: Arc<winit::window::Window>,
-        ) -> anyhow::Result<EngineState>
+        pub async fn new(window: Arc<winit::window::Window>) -> anyhow::Result<EngineState>
         {
                 let instance = EngineBuilder::instance();
 
@@ -570,7 +560,9 @@ impl EngineState
 
                 let surface = instance.create_surface(window.clone()).unwrap();
 
-                let adapter = EngineBuilder::adapter(&instance, window.clone()).await.unwrap();
+                let adapter = EngineBuilder::adapter(&instance, window.clone())
+                        .await
+                        .unwrap();
 
                 let (device, queue) = EngineBuilder::device_queue(&adapter).await.unwrap();
 
@@ -620,7 +612,10 @@ impl ApplicationHandler<EngineState> for Engine
         {
                 #[cfg(target_arch = "wasm32")]
                 {
-                        self.window.clone().expect("Window doesn't exist.").request_redraw();
+                        self.window
+                                .clone()
+                                .expect("Window doesn't exist.")
+                                .request_redraw();
 
                         web_sys::console::log_1(&"user_event fired".into());
                 }
@@ -653,7 +648,7 @@ impl ApplicationHandler<EngineState> for Engine
 
                 #[allow(unused_mut)]
                 let mut window_attributes =
-                    Window::default_attributes().with_title("Oxide Render Engine");
+                        Window::default_attributes().with_title("Oxide Render Engine");
 
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -668,14 +663,10 @@ impl ApplicationHandler<EngineState> for Engine
                         let html_canvas_element = canvas.unchecked_into();
 
                         window_attributes =
-                            window_attributes.with_canvas(Some(html_canvas_element));
+                                window_attributes.with_canvas(Some(html_canvas_element));
                 }
 
-                let window = Arc::new(
-                        event_loop
-                            .create_window(window_attributes)
-                            .unwrap(),
-                );
+                let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
                 self.window = Some(window.clone());
 
@@ -689,21 +680,33 @@ impl ApplicationHandler<EngineState> for Engine
                 {
                         // In WASM builds, async tasks must be spawned without blocking.
                         #[cfg(target_arch = "wasm32")]
-                        if let Some(proxy) = self.proxy.take() {
+                        if let Some(proxy) = self.proxy.take()
+                        {
                                 wasm_bindgen_futures::spawn_local(async move {
                                         let state_result = EngineState::new(window).await;
-                                        match state_result {
-                                                Ok(state) => {
-                                                        web_sys::console::log_1(&"State initialized, sending event".into());
+                                        match state_result
+                                        {
+                                                Ok(state) =>
+                                                {
+                                                        web_sys::console::log_1(
+                                                                &"State initialized, sending event"
+                                                                        .into(),
+                                                        );
                                                         assert!(proxy.send_event(state).is_ok());
-                                                },
-                                                Err(e) => web_sys::console::error_1(&format!("State init failed: {:?}", e).into()),
+                                                }
+                                                Err(e) => web_sys::console::error_1(
+                                                        &format!("State init failed: {:?}", e)
+                                                                .into(),
+                                                ),
                                         }
                                 });
-                        } else {
-                                web_sys::console::log_1(&"Proxy is None, skipping async init".into());
                         }
-
+                        else
+                        {
+                                web_sys::console::log_1(
+                                        &"Proxy is None, skipping async init".into(),
+                                );
+                        }
                 }
         }
 
@@ -730,18 +733,17 @@ impl ApplicationHandler<EngineState> for Engine
                                 match self.render()
                                 {
                                         Ok(_) =>
-                                                {}
+                                        {}
                                         // Reconfigure the surface if it's lost or outdated
                                         Err(
                                                 wgpu::SurfaceError::Lost
                                                 | wgpu::SurfaceError::Outdated,
                                         ) =>
-                                                {
-                                                }
+                                        {}
                                         Err(e) =>
-                                                {
-                                                        log::error!("Unable to render {}", e);
-                                                }
+                                        {
+                                                log::error!("Unable to render {}", e);
+                                        }
                                 }
                         }
                         WindowEvent::KeyboardInput {
@@ -832,10 +834,15 @@ impl EngineBuilder
         {
                 let resources = Resources::new();
 
+                let render_graph = RenderGraph {
+                        passes: vec![],
+                };
+
                 Self {
                         engine: Engine {
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
+                                render_graph,
                                 resources,
                                 state: None,
                                 time: None,
@@ -1016,7 +1023,7 @@ impl EngineBuilder
                         // Debug tracing.
                         trace: wgpu::Trace::Off,
                 })
-                    .await
+                .await
         }
 
         fn texture_format(surface_caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat
