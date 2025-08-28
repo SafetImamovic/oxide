@@ -1,4 +1,5 @@
 use derivative::Derivative;
+use egui_wgpu::Renderer;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -102,7 +103,7 @@ impl RenderPass for BackgroundPass
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some(self.name()),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &view,
+                                view,
                                 resolve_target: None,
                                 ops: wgpu::Operations {
                                         load: wgpu::LoadOp::Clear(self.clear_color),
@@ -115,5 +116,7 @@ impl RenderPass for BackgroundPass
                 });
 
                 render_pass.set_pipeline(&self.pipeline);
+
         }
 }
+

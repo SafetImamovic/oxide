@@ -121,7 +121,7 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
-        pub render_graph: RenderGraph,
+
 
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
@@ -204,21 +204,9 @@ impl Engine
                                         label: Some("Main Render Encoder"),
                                 });
 
-                let mut bg_pass = BackgroundPass {
-                        name: "bg_pass".to_string(),
-                        enabled: true,
-                        clear_color: wgpu::Color {
-                                r: 0.15,
-                                g: 0.15,
-                                b: 0.15,
-                                a: 1.0,
-                        },
-                        pipeline: state.render_pipeline.clone(),
-                };
 
-                self.render_graph.add_pass(Box::new(bg_pass));
 
-                self.render_graph.execute(&view, &mut encoder);
+                state.render_graph.execute(&view, &mut encoder);
 
                 // Diabolical levels of indentation.
                 {
@@ -247,6 +235,7 @@ impl Engine
                         render_pass.draw(0..pentagon.get_num_vertices(), 0..1);
                         */
                 }
+
 
                 let scale = self.window.as_ref().unwrap().scale_factor() as f32;
 
@@ -359,7 +348,7 @@ pub struct EngineState
 
         pub index_buffers: Vec<wgpu::Buffer>,
 
-        pub render_pipeline: wgpu::RenderPipeline,
+        pub render_graph: RenderGraph,
 }
 
 impl EngineState
@@ -380,13 +369,14 @@ impl EngineState
 
                 let size = window.inner_size();
 
-                let surface = instance.create_surface(window.clone()).unwrap();
+                let surface = instance.create_surface(window.clone())?;
 
                 let adapter = EngineBuilder::adapter(&instance, window.clone())
-                        .await
-                        .unwrap();
+                        .await?;
 
-                let (device, queue) = EngineBuilder::device_queue(&adapter).await.unwrap();
+                Self::log_adapter_info(&adapter);
+
+                let (device, queue) = EngineBuilder::device_queue(&adapter).await?;
 
                 let surface_caps = surface.get_capabilities(&adapter);
 
@@ -401,12 +391,31 @@ impl EngineState
                         "depth_texture",
                 );
 
+                let render_pipeline =
+                    PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
+
+                let mut bg_pass = BackgroundPass {
+                        name: "bg_pass".to_string(),
+                        enabled: true,
+                        clear_color: wgpu::Color {
+                                r: 0.15,
+                                g: 0.15,
+                                b: 0.15,
+                                a: 1.0,
+                        },
+                        pipeline: render_pipeline.render_pipeline,
+                };
+
+                let mut render_graph = RenderGraph { passes: vec![] };
+
+                render_graph.add_pass(Box::new(bg_pass));
+
                 let gui = GuiRenderer::new(&device, surface_configuration.format, None, 1, &window);
 
-                let render_pipeline =
-                        PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
+
 
                 Ok(EngineState {
+                        render_graph,
                         is_surface_configured: false,
                         gui,
                         surface,
@@ -416,10 +425,14 @@ impl EngineState
                         surface_caps,
                         texture_format,
                         surface_configuration,
-                        render_pipeline: render_pipeline.render_pipeline,
                         index_buffers: vec![],
                         vertex_buffers: vec![],
                 })
+        }
+
+        pub fn log_adapter_info(adapter: &wgpu::Adapter)
+        {
+                log::info!("Adapter Info: {:#?}", adapter.get_info());
         }
 }
 
@@ -441,8 +454,6 @@ impl ApplicationHandler<EngineState> for Engine
                                 .clone()
                                 .expect("Window doesn't exist.")
                                 .request_redraw();
-
-                        web_sys::console::log_1(&"user_event fired".into());
                 }
 
                 self.state = Some(event);
@@ -501,6 +512,7 @@ impl ApplicationHandler<EngineState> for Engine
                         self.state = Some(pollster::block_on(EngineState::new(window)).unwrap());
                 }
 
+
                 #[cfg(target_arch = "wasm32")]
                 {
                         // In WASM builds, async tasks must be spawned without blocking.
@@ -533,6 +545,8 @@ impl ApplicationHandler<EngineState> for Engine
                                 );
                         }
                 }
+
+
         }
 
         fn window_event(
@@ -542,6 +556,14 @@ impl ApplicationHandler<EngineState> for Engine
                 event: WindowEvent,
         )
         {
+                let state = match &mut self.state
+                {
+                        Some(canvas) => canvas,
+                        None => return,
+                };
+
+                state.gui.handle_input(&self.window.as_ref().unwrap(), &event);
+
                 match event
                 {
                         WindowEvent::CloseRequested =>
@@ -659,15 +681,10 @@ impl EngineBuilder
         {
                 let resources = Resources::new();
 
-                let render_graph = RenderGraph {
-                        passes: vec![],
-                };
-
                 Self {
                         engine: Engine {
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
-                                render_graph,
                                 resources,
                                 state: None,
                                 time: None,
