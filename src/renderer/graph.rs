@@ -90,19 +90,24 @@ impl RenderPass for BackgroundPass
                                     self.clear_color.a as f32,
                             ];
 
-                            if ui.color_edit_button_rgba_unmultiplied(&mut color).changed() {
-                                    self.clear_color = wgpu::Color {
-                                            r: color[0] as f64,
-                                            g: color[1] as f64,
-                                            b: color[2] as f64,
-                                            a: color[3] as f64,
-                                    };
-                            }
+                            ui.horizontal(|ui| {
+                                    ui.label("Color");
+                                    if ui.color_edit_button_rgba_unmultiplied(&mut color).changed() {
+                                            self.clear_color = wgpu::Color {
+                                                    r: color[0] as f64,
+                                                    g: color[1] as f64,
+                                                    b: color[2] as f64,
+                                                    a: color[3] as f64,
+                                            };
+                                    }
+                            });
 
                             // Info fields
                             ui.label("LoadOp: Clear");
                             ui.label("StoreOp: Store");
                             ui.label("Depth/stencil attachment: None");
+
+
                     });
         }
 

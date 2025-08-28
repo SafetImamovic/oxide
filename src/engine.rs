@@ -121,6 +121,7 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
+        pub ui_scale: f32,
 
 
         // --- Core Context ---
@@ -439,13 +440,37 @@ impl EngineState
                 let render_pipeline =
                     PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
 
-                let mut bg_pass = BackgroundPass {
+                let bg_pass = BackgroundPass {
                         name: "bg_pass".to_string(),
                         enabled: true,
                         clear_color: wgpu::Color {
-                                r: 0.15,
-                                g: 0.15,
-                                b: 0.15,
+                                r: 1.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 1.0,
+                        },
+                        pipeline: render_pipeline.render_pipeline.clone(),
+                };
+
+                let bg_pass_2 = BackgroundPass {
+                        name: "bg_pass_2".to_string(),
+                        enabled: true,
+                        clear_color: wgpu::Color {
+                                r: 0.0,
+                                g: 1.0,
+                                b: 0.0,
+                                a: 1.0,
+                        },
+                        pipeline: render_pipeline.render_pipeline.clone(),
+                };
+
+                let bg_pass_3 = BackgroundPass {
+                        name: "bg_pass_3".to_string(),
+                        enabled: true,
+                        clear_color: wgpu::Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 1.0,
                                 a: 1.0,
                         },
                         pipeline: render_pipeline.render_pipeline,
@@ -454,6 +479,8 @@ impl EngineState
                 let mut render_graph = RenderGraph { passes: vec![] };
 
                 render_graph.add_pass(Box::new(bg_pass));
+                render_graph.add_pass(Box::new(bg_pass_2));
+                render_graph.add_pass(Box::new(bg_pass_3));
 
                 let gui = GuiRenderer::new(&device, surface_configuration.format, None, 1, &window);
 
@@ -727,6 +754,7 @@ impl EngineBuilder
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 resources,
+                                ui_scale: 2.0,
                                 state: None,
                                 time: None,
                                 render_ctx: None,

@@ -28,6 +28,8 @@ pub struct GuiRenderer
         pub show_right_panel: bool,
 
         frame_started: bool,
+
+        pub ui_scale: f32,
 }
 
 impl GuiRenderer
@@ -64,11 +66,14 @@ impl GuiRenderer
                         true,
                 );
 
+
+
                 GuiRenderer {
                         show_right_panel: true,
                         state: egui_state,
                         renderer: egui_renderer,
                         frame_started: false,
+                        ui_scale: 1.0,
                 }
         }
 
@@ -83,10 +88,10 @@ impl GuiRenderer
 
         pub fn ppp(
                 &mut self,
-                v: f32,
+                v: &mut f32,
         )
         {
-                self.context().set_pixels_per_point(1.0);
+                self.context().set_pixels_per_point(v.clone());
         }
 
         pub fn begin_frame(
@@ -94,7 +99,7 @@ impl GuiRenderer
                 window: &Window,
         )
         {
-                self.ppp(Self::current_pixels_per_point(window));
+                //self.ppp(self.current_pixels_per_point(window));
 
                 let raw_input = self.state.take_egui_input(window);
 
@@ -125,7 +130,7 @@ impl GuiRenderer
                 self.state
                         .handle_platform_output(&window, full_output.platform_output);
 
-                let tris = self.state.egui_ctx().tessellate(full_output.shapes, 1.0);
+                let tris = self.state.egui_ctx().tessellate(full_output.shapes, self.ui_scale);
                 for (id, image_delta) in &full_output.textures_delta.set
                 {
                         self.renderer
@@ -168,34 +173,56 @@ impl GuiRenderer
         pub fn render_pass_window(&mut self, graph: &mut RenderGraph) {
                 egui::Window::new("Render Pass Graph")
                     .resizable(true)
-                    .scroll(true) // allow scrolling if many passes
+                    .scroll(true)
                     .show(self.context(), |ui| {
+                            // Read length before starting iter_mut() to avoid E0502.
+                            let len = graph.passes.len();
 
+                            // Defer reordering until after the loop.
+                            let mut move_req: Option<(usize, isize)> = None;
 
-                            // Example: 10 render passes
-                            for mut i in &mut graph.passes {
+                            for (i, pass) in graph.passes.iter_mut().enumerate() {
+                                    let mut enabled = pass.enabled();
 
-                                    let mut enabled: bool = i.enabled();
+                                    ui.horizontal(|ui| {
+                                            pass.ui(ui);
 
-                                    i.ui(ui);
-                                    ui.checkbox(&mut enabled, "Enabled");
+                                            // Right-aligned block for the buttons
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+
+                                                    ui.checkbox(&mut enabled, "Enabled");
+
+                                                    if ui.button("v").clicked() && i + 1 < len {
+                                                            move_req = Some((i, 1));
+                                                    }
+                                                    if ui.button("^").clicked() && i > 0 {
+                                                            move_req = Some((i, -1));
+                                                    }
+                                            });
+                                    });
+
                                     ui.separator();
 
-                                    i.set_enabled(enabled);
+                                    pass.set_enabled(enabled);
+                            }
+
+                            // Now the iterator is dropped, so we can safely mutate the Vec.
+                            if let Some((i, d)) = move_req {
+                                    let j = (i as isize + d) as usize;
+                                    graph.passes.swap(i, j);
                             }
                     });
         }
 
 
+
         pub fn debug_window(&mut self)
         {
-                let scale: f32 = 1.0;
-
-                let ctx = self.context().clone();
+                //let mut scale: f32 = ui_scale;
 
                 egui::Area::new("nice".into())
                         .fixed_pos(egui::pos2(10.0, 10.0))
-                        .show(&ctx, |ui| {
+                        .show(self.context(), |ui| {
                                 ui.label("Press [Tab] to toggle right menu");
                         });
 
@@ -205,32 +232,30 @@ impl GuiRenderer
                                 .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
                                 .default_width(300.0)
                                 .show(self.context(), |ui| {
-                                        ui.label("Docked content");
+                                        ui.horizontal(|ui| {
+                                                if ui.button("-").clicked() {
+                                                        //scale = (self.ui_scale - 0.1).max(0.5); // don't go too small
+                                                }
+                                                if ui.button("+").clicked() {
+                                                        //scale = (self.ui_scale + 0.1).min(3.0); // don't go crazy
+                                                }
+
+                                                ui.label(format!("UI Scale: {:.1}", self.ui_scale));
+                                        });
                                 });
                 }
 
-                /*
-                egui::Window::new("Oxide Debug Window")
-                        .resizable(true)
-                        .vscroll(true)
-                        .default_open(false)
-                        .show(self.context(), |ui| {
-                                ui.horizontal(ui_def);
-                        });
-                */
         }
 
         #[cfg(target_arch = "wasm32")]
-        pub fn current_pixels_per_point(window: &winit::window::Window) -> f32
+        pub fn current_pixels_per_point(&self, window: &winit::window::Window) -> f32
         {
-                let ppp = web_sys::window().unwrap().device_pixel_ratio() as f32;
-
-                ppp
+                web_sys::window().unwrap().device_pixel_ratio() as f32 * self.ui_scale
         }
 
         #[cfg(not(target_arch = "wasm32"))]
-        pub fn current_pixels_per_point(window: &winit::window::Window) -> f32
+        pub fn current_pixels_per_point(&self, window: &winit::window::Window) -> f32
         {
-                window.scale_factor() as f32 * 1.0
+                window.scale_factor() as f32 * self.ui_scale
         }
 }
