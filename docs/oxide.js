@@ -240,29 +240,48 @@ function debugString(val) {
     return className;
 }
 /**
- * WASM entrypoint function.
+ * WebAssembly entry point for the engine runtime.
  *
- * This function is called automatically by the JavaScript glue code
- * when the WASM module is loaded in the browser.
+ * This function is automatically called by the browser when
+ * the WebAssembly module is initialized, thanks to the
+ * [`wasm_bindgen(start)`] attribute.
+ *
+ * It sets up a panic hook for better error reporting in the browser,
+ * then delegates to [`start`] to perform the normal setup and run cycle.
+ *
+ * # Errors
+ * Returns a [`JsValue`] if initialization fails, though in practice
+ * most errors will already result in a panic being reported to the console.
+ *
+ * # Notes
+ * - This function replaces `main` on wasm targets.
+ * - It is important that `fn setup() -> EngineRunner` is declared statically
+ *   in the handler type, since it must be accessible without instance state.
+ *
+ * # Examples
+ * ```ignore
+ * // No need to call this manually. The browser automatically
+ * // invokes `run_wasm` when the wasm module loads.
+ * ```
  */
-export function run_web() {
-    wasm.run_web();
+export function run_oxide_wasm() {
+    wasm.run_oxide_wasm();
 }
 
 function __wbg_adapter_32(arg0, arg1) {
-    wasm._dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h7de2e63149679350(arg0, arg1);
+    wasm._dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h1906bbbc873e7667(arg0, arg1);
 }
 
 function __wbg_adapter_35(arg0, arg1, arg2) {
-    wasm.closure3084_externref_shim(arg0, arg1, arg2);
+    wasm.closure2872_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_50(arg0, arg1, arg2, arg3) {
-    wasm.closure3089_externref_shim(arg0, arg1, arg2, arg3);
+    wasm.closure2874_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 function __wbg_adapter_53(arg0, arg1, arg2) {
-    wasm.closure3261_externref_shim(arg0, arg1, arg2);
+    wasm.closure3046_externref_shim(arg0, arg1, arg2);
 }
 
 const __wbindgen_enum_GpuAddressMode = ["clamp-to-edge", "repeat", "mirror-repeat"];
@@ -2624,44 +2643,44 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper10129 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3262, __wbg_adapter_53);
+    imports.wbg.__wbindgen_closure_wrapper7871 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 2870, __wbg_adapter_32);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper8198 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3085, __wbg_adapter_32);
+    imports.wbg.__wbindgen_closure_wrapper7872 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 2870, __wbg_adapter_35);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper8199 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3085, __wbg_adapter_35);
+    imports.wbg.__wbindgen_closure_wrapper7873 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 2870, __wbg_adapter_35);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper8200 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3085, __wbg_adapter_35);
+    imports.wbg.__wbindgen_closure_wrapper7874 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 2870, __wbg_adapter_35);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper8201 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3085, __wbg_adapter_35);
+    imports.wbg.__wbindgen_closure_wrapper7875 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 2870, __wbg_adapter_35);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper8202 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3085, __wbg_adapter_35);
+    imports.wbg.__wbindgen_closure_wrapper7876 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 2870, __wbg_adapter_35);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper8203 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3085, __wbg_adapter_35);
+    imports.wbg.__wbindgen_closure_wrapper7877 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 2870, __wbg_adapter_35);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper8204 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3085, __wbg_adapter_35);
+    imports.wbg.__wbindgen_closure_wrapper7878 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 2870, __wbg_adapter_35);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper8205 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3085, __wbg_adapter_35);
+    imports.wbg.__wbindgen_closure_wrapper7879 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 2870, __wbg_adapter_50);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper8206 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3085, __wbg_adapter_50);
+    imports.wbg.__wbindgen_closure_wrapper9802 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 3047, __wbg_adapter_53);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

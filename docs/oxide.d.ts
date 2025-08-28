@@ -1,18 +1,37 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WASM entrypoint function.
+ * WebAssembly entry point for the engine runtime.
  *
- * This function is called automatically by the JavaScript glue code
- * when the WASM module is loaded in the browser.
+ * This function is automatically called by the browser when
+ * the WebAssembly module is initialized, thanks to the
+ * [`wasm_bindgen(start)`] attribute.
+ *
+ * It sets up a panic hook for better error reporting in the browser,
+ * then delegates to [`start`] to perform the normal setup and run cycle.
+ *
+ * # Errors
+ * Returns a [`JsValue`] if initialization fails, though in practice
+ * most errors will already result in a panic being reported to the console.
+ *
+ * # Notes
+ * - This function replaces `main` on wasm targets.
+ * - It is important that `fn setup() -> EngineRunner` is declared statically
+ *   in the handler type, since it must be accessible without instance state.
+ *
+ * # Examples
+ * ```ignore
+ * // No need to call this manually. The browser automatically
+ * // invokes `run_wasm` when the wasm module loads.
+ * ```
  */
-export function run_web(): void;
+export function run_oxide_wasm(): void;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly run_web: () => void;
+  readonly run_oxide_wasm: () => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_1: WebAssembly.Table;
   readonly __wbindgen_exn_store: (a: number) => void;
@@ -20,10 +39,10 @@ export interface InitOutput {
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_6: WebAssembly.Table;
-  readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h7de2e63149679350: (a: number, b: number) => void;
-  readonly closure3084_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure3089_externref_shim: (a: number, b: number, c: any, d: any) => void;
-  readonly closure3261_externref_shim: (a: number, b: number, c: any) => void;
+  readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h1906bbbc873e7667: (a: number, b: number) => void;
+  readonly closure2872_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure2874_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure3046_externref_shim: (a: number, b: number, c: any) => void;
   readonly __wbindgen_start: () => void;
 }
 
