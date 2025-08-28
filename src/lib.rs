@@ -40,7 +40,12 @@ use winit::platform::web::EventLoopExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::{app::App, config::Config, utils::exit::get_exit_message};
+use crate::{
+        app::App,
+        config::Config,
+        geometry::{mesh::Mesh, vertex::Vertex},
+        utils::exit::get_exit_message,
+};
 use winit::event_loop::EventLoop;
 
 /// Starts the application in native or WASM environments.
@@ -167,4 +172,118 @@ impl InstanceRaw
                         ],
                 }
         }
+}
+
+pub const PENTAGON: &[Vertex] = &[
+        Vertex {
+                position: [-0.0868241, 0.49240386, 0.0],
+                tex_coords: [0.4131759, 0.00759614],
+        }, // A
+        Vertex {
+                position: [-0.49513406, 0.06958647, 0.0],
+                tex_coords: [0.0048659444, 0.43041354],
+        }, // B
+        Vertex {
+                position: [-0.21918549, -0.44939706, 0.0],
+                tex_coords: [0.28081453, 0.949397],
+        }, // C
+        Vertex {
+                position: [0.35966998, -0.3473291, 0.0],
+                tex_coords: [0.85967, 0.84732914],
+        }, // D
+        Vertex {
+                position: [0.44147372, 0.2347359, 0.0],
+                tex_coords: [0.9414737, 0.2652641],
+        }, // E
+];
+
+pub const P_INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+
+pub const MESH: Mesh = Mesh {
+        vertices: PENTAGON,
+        indices: P_INDICES,
+};
+
+pub fn run_oxide() -> anyhow::Result<()>
+{
+        crate::utils::bootstrap::config_logging();
+
+        crate::utils::bootstrap::show_start_message();
+
+        /*
+        let mut engine = Engine::new();
+
+
+        // Load resources
+        let tex = engine.load_texture("brick.png");
+        let mesh = engine.load_mesh("cube.obj");
+
+        // Create material
+        let mat = engine.create_material("pbr_shader")
+            .with_texture("albedo", tex);
+
+        // Scene
+        engine.draw(mesh, mat, Transform::from_position([0.0, 0.0, -5.0]));
+
+        // Effects
+        engine.add_effect(Effect::Bloom { intensity: 1.2 });
+        engine.add_effect(Effect::DepthOfField { focus: 0.5 });
+        engine.add_effect(Effect::ShadowMapping);
+
+        // Main loop
+        engine.run();
+        */
+
+        //oxide::run().unwrap();
+
+        let mut engine = crate::engine::EngineBuilder::new().build().unwrap();
+
+        engine.add_mesh("Pentagon", MESH);
+
+        let runner = crate::engine::EngineRunner::new(engine)?;
+
+        runner.run()?;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+                let msg = get_exit_message();
+
+                log::info!("{msg}");
+        }
+
+        Ok(())
+}
+
+/// WebAssembly entry point for the engine runtime.
+///
+/// This function is automatically called by the browser when
+/// the WebAssembly module is initialized, thanks to the
+/// [`wasm_bindgen(start)`] attribute.
+///
+/// It sets up a panic hook for better error reporting in the browser,
+/// then delegates to [`start`] to perform the normal setup and run cycle.
+///
+/// # Errors
+/// Returns a [`JsValue`] if initialization fails, though in practice
+/// most errors will already result in a panic being reported to the console.
+///
+/// # Notes
+/// - This function replaces `main` on wasm targets.
+/// - It is important that `fn setup() -> EngineRunner` is declared statically
+///   in the handler type, since it must be accessible without instance state.
+///
+/// # Examples
+/// ```ignore
+/// // No need to call this manually. The browser automatically
+/// // invokes `run_wasm` when the wasm module loads.
+/// ```
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(start)]
+pub fn run_oxide_wasm() -> Result<(), JsValue>
+{
+        console_error_panic_hook::set_once();
+
+        run_oxide();
+
+        Ok(())
 }

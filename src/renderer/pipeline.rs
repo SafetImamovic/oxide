@@ -54,7 +54,7 @@ impl PipelineManager
                                 targets: &[Some(wgpu::ColorTargetState {
                                         // 4.
                                         format: config.format,
-                                        blend: Some(wgpu::BlendState::REPLACE),
+                                        blend: Some(wgpu::BlendState { color: wgpu::BlendComponent::OVER, alpha: wgpu::BlendComponent::OVER }),
                                         write_mask: wgpu::ColorWrites::ALL,
                                 })],
                                 compilation_options: wgpu::PipelineCompilationOptions::default(),
