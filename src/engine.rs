@@ -29,6 +29,7 @@ use wasm_bindgen::prelude::*;
 use crate::geometry::mesh::Mesh;
 use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::RenderGraph;
+use crate::ui::renderer::GuiRenderer;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use winit::window::Window;
 use winit::{
@@ -247,6 +248,32 @@ impl Engine
                         */
                 }
 
+                let scale = self.window.as_ref().unwrap().scale_factor() as f32;
+
+                let screen_descriptor = egui_wgpu::ScreenDescriptor {
+                        size_in_pixels: [
+                                state.surface_configuration.width,
+                                state.surface_configuration.height,
+                        ],
+                        pixels_per_point: 1.0 / scale, /* inversely counteracts the
+                                                        * Browser DPI */
+                };
+
+                {
+                        state.gui.begin_frame(self.window.as_ref().unwrap());
+
+                        state.gui.render();
+
+                        state.gui.end_frame_and_draw(
+                                &state.device,
+                                &state.queue,
+                                &mut encoder,
+                                self.window.as_ref().unwrap(),
+                                &view,
+                                screen_descriptor,
+                        );
+                }
+
                 state.queue.submit(std::iter::once(encoder.finish()));
 
                 output.present();
@@ -306,6 +333,8 @@ impl Engine
 #[derive(Debug)]
 pub struct EngineState
 {
+        pub gui: GuiRenderer,
+
         pub is_surface_configured: bool,
 
         /// The rendering surface tied to the window.
@@ -372,11 +401,14 @@ impl EngineState
                         "depth_texture",
                 );
 
+                let gui = GuiRenderer::new(&device, surface_configuration.format, None, 1, &window);
+
                 let render_pipeline =
                         PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
 
                 Ok(EngineState {
                         is_surface_configured: false,
+                        gui,
                         surface,
                         adapter,
                         device,

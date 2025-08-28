@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use derivative::Derivative;
 use egui::Context;
 use egui_wgpu::Renderer;
@@ -89,10 +91,9 @@ impl GuiRenderer
         pub fn begin_frame(
                 &mut self,
                 window: &Window,
-                config: &crate::config::Config,
         )
         {
-                self.ppp(Self::current_pixels_per_point(window, config));
+                self.ppp(Self::current_pixels_per_point(window));
 
                 let raw_input = self.state.take_egui_input(window);
 
@@ -106,7 +107,7 @@ impl GuiRenderer
                 device: &Device,
                 queue: &Queue,
                 encoder: &mut CommandEncoder,
-                window: &Window,
+                window: &winit::window::Window,
                 window_surface_view: &TextureView,
                 screen_descriptor: ScreenDescriptor,
         )
@@ -121,7 +122,7 @@ impl GuiRenderer
                 let full_output = self.state.egui_ctx().end_pass();
 
                 self.state
-                        .handle_platform_output(window, full_output.platform_output);
+                        .handle_platform_output(&window, full_output.platform_output);
 
                 let tris = self.state.egui_ctx().tessellate(full_output.shapes, 1.0);
                 for (id, image_delta) in &full_output.textures_delta.set
@@ -157,20 +158,14 @@ impl GuiRenderer
                 self.frame_started = false;
         }
 
-        pub fn render(
-                &mut self,
-                config: &mut crate::Config,
-        )
+        pub fn render(&mut self)
         {
-                self.debug_window(config);
+                self.debug_window();
         }
 
-        pub fn debug_window(
-                &mut self,
-                config: &mut crate::Config,
-        )
+        pub fn debug_window(&mut self)
         {
-                let mut scale: f32 = config.gui_scale;
+                let scale: f32 = 1.0;
 
                 let ctx = self.context().clone();
 
@@ -199,29 +194,19 @@ impl GuiRenderer
                                 ui.horizontal(ui_def);
                         });
                 */
-
-                config.gui_scale = scale;
         }
 
         #[cfg(target_arch = "wasm32")]
-        pub fn current_pixels_per_point(
-                window: &winit::window::Window,
-                config: &crate::config::Config,
-        ) -> f32
+        pub fn current_pixels_per_point(window: &winit::window::Window) -> f32
         {
                 let ppp = web_sys::window().unwrap().device_pixel_ratio() as f32;
-
-                log::info!("PPP: {ppp}");
 
                 ppp
         }
 
         #[cfg(not(target_arch = "wasm32"))]
-        pub fn current_pixels_per_point(
-                window: &winit::window::Window,
-                config: &crate::config::Config,
-        ) -> f32
+        pub fn current_pixels_per_point(window: &winit::window::Window) -> f32
         {
-                window.scale_factor() as f32 * config.gui_scale
+                window.scale_factor() as f32 * 1.0
         }
 }
