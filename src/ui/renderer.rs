@@ -28,8 +28,6 @@ pub struct GuiRenderer
         pub show_right_panel: bool,
 
         frame_started: bool,
-
-        pub ui_scale: f32,
 }
 
 impl GuiRenderer
@@ -73,7 +71,6 @@ impl GuiRenderer
                         state: egui_state,
                         renderer: egui_renderer,
                         frame_started: false,
-                        ui_scale: 1.0,
                 }
         }
 
@@ -88,18 +85,19 @@ impl GuiRenderer
 
         pub fn ppp(
                 &mut self,
-                v: &mut f32,
+                v: f32,
         )
         {
-                self.context().set_pixels_per_point(v.clone());
+                self.context().set_pixels_per_point(v);
         }
 
         pub fn begin_frame(
                 &mut self,
                 window: &Window,
+                ui_scale: &mut f32
         )
         {
-                //self.ppp(self.current_pixels_per_point(window));
+                self.ppp(self.current_pixels_per_point(window, ui_scale));
 
                 let raw_input = self.state.take_egui_input(window);
 
@@ -130,7 +128,8 @@ impl GuiRenderer
                 self.state
                         .handle_platform_output(&window, full_output.platform_output);
 
-                let tris = self.state.egui_ctx().tessellate(full_output.shapes, self.ui_scale);
+                let tris = self.state.egui_ctx().tessellate(full_output.shapes, self.context().pixels_per_point());
+
                 for (id, image_delta) in &full_output.textures_delta.set
                 {
                         self.renderer
@@ -138,6 +137,7 @@ impl GuiRenderer
                 }
                 self.renderer
                         .update_buffers(device, queue, encoder, &tris, &screen_descriptor);
+
                 let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                 view: window_surface_view,
@@ -164,9 +164,9 @@ impl GuiRenderer
                 self.frame_started = false;
         }
 
-        pub fn render(&mut self, graph: &mut RenderGraph)
+        pub fn render(&mut self, graph: &mut RenderGraph, ui_scale: &mut f32)
         {
-                self.debug_window();
+                self.debug_window(ui_scale);
                 self.render_pass_window(graph);
         }
 
@@ -216,9 +216,9 @@ impl GuiRenderer
 
 
 
-        pub fn debug_window(&mut self)
+        pub fn debug_window(&mut self, ui_scale: &mut f32)
         {
-                //let mut scale: f32 = ui_scale;
+                let mut scale: f32 = ui_scale.clone();
 
                 egui::Area::new("nice".into())
                         .fixed_pos(egui::pos2(10.0, 10.0))
@@ -234,17 +234,18 @@ impl GuiRenderer
                                 .show(self.context(), |ui| {
                                         ui.horizontal(|ui| {
                                                 if ui.button("-").clicked() {
-                                                        //scale = (self.ui_scale - 0.1).max(0.5); // don't go too small
+                                                        scale = (scale - 0.1).max(0.5); // don't go too small
                                                 }
                                                 if ui.button("+").clicked() {
-                                                        //scale = (self.ui_scale + 0.1).min(3.0); // don't go crazy
+                                                        scale = (scale + 0.1).min(3.0); // don't go crazy
                                                 }
 
-                                                ui.label(format!("UI Scale: {:.1}", self.ui_scale));
+                                                ui.label(format!("UI Scale: {:.1}", scale));
                                         });
                                 });
                 }
 
+                *ui_scale = scale;
         }
 
         #[cfg(target_arch = "wasm32")]
@@ -254,8 +255,8 @@ impl GuiRenderer
         }
 
         #[cfg(not(target_arch = "wasm32"))]
-        pub fn current_pixels_per_point(&self, window: &winit::window::Window) -> f32
+        pub fn current_pixels_per_point(&self, window: &winit::window::Window, ui_scale: &mut f32) -> f32
         {
-                window.scale_factor() as f32 * self.ui_scale
+                window.scale_factor() as f32 * ui_scale.clone()
         }
 }

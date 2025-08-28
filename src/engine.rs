@@ -245,19 +245,21 @@ impl Engine
 
                 let scale = self.window.as_ref().unwrap().scale_factor() as f32;
 
+                let pixels_per_point = self.ui_scale;
+
                 let screen_descriptor = egui_wgpu::ScreenDescriptor {
                         size_in_pixels: [
                                 state.surface_configuration.width,
                                 state.surface_configuration.height,
                         ],
-                        pixels_per_point: 1.0 / scale, /* inversely counteracts the
+                        pixels_per_point, /* inversely counteracts the
                                                         * Browser DPI */
                 };
 
                 {
-                        state.gui.begin_frame(self.window.as_ref().unwrap());
+                        state.gui.begin_frame(self.window.as_ref().unwrap(), &mut self.ui_scale);
 
-                        state.gui.render(&mut state.render_graph);
+                        state.gui.render(&mut state.render_graph, &mut self.ui_scale);
 
                         state.gui.end_frame_and_draw(
                                 &state.device,
