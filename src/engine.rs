@@ -211,6 +211,8 @@ impl Engine
 
                 state.render_graph.execute(&view, &mut encoder);
 
+
+
                 // Diabolical levels of indentation.
                 {
 
@@ -254,7 +256,7 @@ impl Engine
                 {
                         state.gui.begin_frame(self.window.as_ref().unwrap());
 
-                        state.gui.render();
+                        state.gui.render(&mut state.render_graph);
 
                         state.gui.end_frame_and_draw(
                                 &state.device,

@@ -13,6 +13,7 @@ use wgpu::TextureFormat;
 use wgpu::TextureView;
 use winit::event::WindowEvent;
 use winit::window::Window;
+use crate::renderer::graph::RenderGraph;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -158,10 +159,33 @@ impl GuiRenderer
                 self.frame_started = false;
         }
 
-        pub fn render(&mut self)
+        pub fn render(&mut self, graph: &mut RenderGraph)
         {
                 self.debug_window();
+                self.render_pass_window(graph);
         }
+
+        pub fn render_pass_window(&mut self, graph: &mut RenderGraph) {
+                egui::Window::new("Render Pass Graph")
+                    .resizable(true)
+                    .scroll(true) // allow scrolling if many passes
+                    .show(self.context(), |ui| {
+
+
+                            // Example: 10 render passes
+                            for mut i in &mut graph.passes {
+
+                                    let mut enabled: bool = i.enabled();
+
+                                    i.ui(ui);
+                                    ui.checkbox(&mut enabled, "Enabled");
+                                    ui.separator();
+
+                                    i.set_enabled(enabled);
+                            }
+                    });
+        }
+
 
         pub fn debug_window(&mut self)
         {
