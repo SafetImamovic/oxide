@@ -197,7 +197,23 @@ pub const PENTAGON: &[Vertex] = &[
         }, // E
 ];
 
+pub const TRI: &[Vertex] = &[
+        Vertex {
+                position: [-0.0, 0.5, 0.0],
+                tex_coords: [0.0, 0.0],
+        }, // A
+        Vertex {
+                position: [-0.5, -0.5, 0.0],
+                tex_coords: [0.0, 0.0],
+        }, // B
+        Vertex {
+                position: [0.5, -0.5, 0.0],
+                tex_coords: [0.0, 0.0],
+        }, // C
+];
+
 pub const P_INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+pub const P_TRI: &[u16] = &[0, 1, 2];
 
 pub fn run_oxide() -> anyhow::Result<()>
 {
@@ -235,10 +251,17 @@ pub fn run_oxide() -> anyhow::Result<()>
 
         let mesh_pentagon = Mesh::new("pentagon", PENTAGON.to_vec(), P_INDICES.to_vec());
 
+        let mesh_triangle = Mesh::new("triangle", TRI.to_vec(), P_TRI.to_vec());
+
         engine.resources
                 .lock()
                 .unwrap()
                 .add_mesh("pentagon", mesh_pentagon);
+
+        engine.resources
+                .lock()
+                .unwrap()
+                .add_mesh("triangle", mesh_triangle);
 
         let runner = crate::engine::EngineRunner::new(engine)?;
 

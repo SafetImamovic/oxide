@@ -209,8 +209,6 @@ impl RenderPass for GeometryPass
                 encoder: &mut wgpu::CommandEncoder,
         )
         {
-                //log::info!("Geometry pass recording!");
-
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some(&self.name),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -228,17 +226,18 @@ impl RenderPass for GeometryPass
 
                 render_pass.set_pipeline(&self.pipeline);
 
-                let mesh = self.resources.lock().unwrap();
+                let resources = self.resources.lock().unwrap();
 
-                let mesh = mesh.meshes.get("pentagon").unwrap();
+                for mesh in resources.meshes.values()
+                {
+                        render_pass.set_vertex_buffer(0, mesh.vertex_buffer().unwrap().slice(..));
 
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer().unwrap().slice(..));
+                        render_pass.set_index_buffer(
+                                mesh.index_buffer().unwrap().slice(..),
+                                mesh.index_format,
+                        );
 
-                render_pass.set_index_buffer(
-                        mesh.index_buffer().unwrap().slice(..),
-                        mesh.index_format,
-                );
-
-                render_pass.draw_indexed(0..mesh.get_index_count(), 0, 0..1);
+                        render_pass.draw_indexed(0..mesh.get_index_count(), 0, 0..1);
+                }
         }
 }

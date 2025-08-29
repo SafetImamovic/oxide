@@ -107,6 +107,14 @@ impl EngineRunner
         }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum FillMode
+{
+        Fill = 0,
+        Wireframe = 1,
+        Vertex = 2,
+}
+
 /// Main entrypoint of Oxide.
 ///
 /// To construct [`Engine`], use [`EngineBuilder`].
@@ -124,6 +132,10 @@ pub struct Engine
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
         pub ui_scale: f32,
+
+        pub fill_mode: FillMode,
+
+        pub features: Vec<wgpu::Features>,
 
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
@@ -245,8 +257,11 @@ impl Engine
                         state.gui
                                 .begin_frame(self.window.as_ref().unwrap(), &mut self.ui_scale);
 
-                        state.gui
-                                .render(&mut state.render_graph, &mut self.ui_scale);
+                        state.gui.render(
+                                &mut state.render_graph,
+                                &mut self.ui_scale,
+                                &mut self.fill_mode,
+                        );
 
                         state.gui.end_frame_and_draw(
                                 &state.device,
@@ -283,6 +298,33 @@ impl Engine
                 {
                         let size = self.window.as_ref().unwrap().inner_size();
                         self._resize(size.width, size.height);
+                }
+        }
+
+        pub fn query_polygon_modes(
+                &mut self,
+                log: bool,
+        )
+        {
+                let state = self.state.as_ref().unwrap();
+
+                let modes = state.get_adapter_features();
+
+                for i in modes.iter()
+                {
+                        self.features.push(i);
+                }
+
+                if !log
+                {
+                        return;
+                }
+
+                log::info!("Platform Specific Features:");
+
+                for i in &self.features
+                {
+                        log::info!("\t{}", i);
                 }
         }
 
@@ -424,8 +466,13 @@ impl EngineState
                         "depth_texture",
                 );
 
-                let render_pipeline =
-                        PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
+                let render_pipeline = PipelineManager::new(
+                        &device,
+                        &surface_configuration,
+                        &[],
+                        &depth_texture,
+                        &FillMode::Wireframe,
+                );
 
                 let bg_pass = BackgroundPass {
                         name: "bg_pass".to_string(),
@@ -493,6 +540,15 @@ impl EngineState
         {
                 log::info!("Adapter Info: {:#?}", adapter.get_info());
         }
+
+        /// Logs the adapter features.
+        ///
+        /// Corresponds to these WebGPU feature Reference
+        /// <https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename>
+        pub fn get_adapter_features(&self) -> wgpu::Features
+        {
+                self.adapter.features()
+        }
 }
 
 impl ApplicationHandler<EngineState> for Engine
@@ -516,9 +572,36 @@ impl ApplicationHandler<EngineState> for Engine
 
                         self.state = Some(event);
 
-                        let device: &wgpu::Device = &self.state.as_ref().unwrap().device;
+                        self.query_polygon_modes();
 
-                        self.resources.upload_all(&device);
+                        let state = self.state.as_mut().unwrap();
+
+                        let device: &wgpu::Device = &state.device;
+
+                        let depth_texture = crate::texture::Texture::create_depth_texture(
+                                &state.device,
+                                &state.surface_configuration,
+                                "depth_texture",
+                        );
+
+                        let render_pipeline = PipelineManager::new(
+                                &state.device,
+                                &state.surface_configuration,
+                                &[],
+                                &depth_texture,
+                                &self.fill_mode,
+                        );
+
+                        let geometry_pass = GeometryPass {
+                                name: "geometry_pass".to_string(),
+                                enabled: true,
+                                pipeline: render_pipeline.render_pipeline,
+                                resources: self.resources.clone(),
+                        };
+
+                        state.render_graph.add_pass(Box::new(geometry_pass));
+
+                        self.resources.lock().unwrap().upload_all(&state.device);
                 }
         }
 
@@ -610,6 +693,8 @@ impl ApplicationHandler<EngineState> for Engine
 
                 #[cfg(not(target_arch = "wasm32"))]
                 {
+                        self.query_polygon_modes(true);
+
                         let state = self.state.as_mut().unwrap();
 
                         let depth_texture = crate::texture::Texture::create_depth_texture(
@@ -623,6 +708,7 @@ impl ApplicationHandler<EngineState> for Engine
                                 &state.surface_configuration,
                                 &[],
                                 &depth_texture,
+                                &self.fill_mode,
                         );
 
                         let geometry_pass = GeometryPass {
@@ -791,6 +877,8 @@ impl EngineBuilder
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 resources,
+                                fill_mode: FillMode::Fill,
+                                features: vec![],
                                 ui_scale: 1.5,
                                 state: None,
                                 time: None,
@@ -949,7 +1037,7 @@ impl EngineBuilder
         {
                 adapter.request_device(&wgpu::DeviceDescriptor {
                         label: None,
-                        required_features: Features::empty(),
+                        required_features: Features::POLYGON_MODE_LINE,
                         // WebGL doesn't support all of wgpu's features, so if
                         // we're building for the web we'll have to disable some.
                         // Describes the limit of certain types of resources that we can
