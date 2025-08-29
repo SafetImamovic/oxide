@@ -54,3 +54,4 @@ web-sys = { version = "0.3.77", features = [
 # Modified egui for WASM without clipboard
 egui = { version = "0.32.0", default-features = false, features = [] }
 
+

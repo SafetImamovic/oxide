@@ -15,7 +15,7 @@ pub struct Mesh
         index_buffer: Option<wgpu::Buffer>,
         index_count: u32,
         vertex_count: u32,
-        index_format: wgpu::IndexFormat,
+        pub index_format: wgpu::IndexFormat,
 
         needs_upload: bool,
 }

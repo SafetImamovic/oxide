@@ -19,6 +19,7 @@
 //! This setup function is registered internally and later executed by [`run`].
 
 use std::sync::Arc;
+use std::sync::Mutex;
 use wgpu::Features;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
@@ -143,7 +144,7 @@ pub struct Engine
         /// The active scene graph or world being rendered and updated.
         pub scene: Option<crate::scene::Scene>,
 
-        pub resources: Resources,
+        pub resources: Arc<Mutex<Resources>>,
 
         /// The main camera used to view the scene.
         pub camera: Option<crate::scene::camera::Camera>,
@@ -462,12 +463,6 @@ impl EngineState
                         pipeline: render_pipeline.render_pipeline.clone(),
                 };
 
-                let geometry_pass = GeometryPass {
-                        name: "geometry_pass".to_string(),
-                        enabled: true,
-                        pipeline: render_pipeline.render_pipeline,
-                };
-
                 let mut render_graph = RenderGraph {
                         passes: vec![],
                 };
@@ -475,7 +470,6 @@ impl EngineState
                 render_graph.add_pass(Box::new(bg_pass));
                 render_graph.add_pass(Box::new(bg_pass_2));
                 render_graph.add_pass(Box::new(bg_pass_3));
-                render_graph.add_pass(Box::new(geometry_pass));
 
                 let gui = GuiRenderer::new(&device, surface_configuration.format, None, 1, &window);
 
@@ -616,9 +610,31 @@ impl ApplicationHandler<EngineState> for Engine
 
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                        let device: &wgpu::Device = &self.state.as_ref().unwrap().device;
+                        let state = self.state.as_mut().unwrap();
 
-                        self.resources.upload_all(&device);
+                        let depth_texture = crate::texture::Texture::create_depth_texture(
+                                &state.device,
+                                &state.surface_configuration,
+                                "depth_texture",
+                        );
+
+                        let render_pipeline = PipelineManager::new(
+                                &state.device,
+                                &state.surface_configuration,
+                                &[],
+                                &depth_texture,
+                        );
+
+                        let geometry_pass = GeometryPass {
+                                name: "geometry_pass".to_string(),
+                                enabled: true,
+                                pipeline: render_pipeline.render_pipeline,
+                                resources: self.resources.clone(),
+                        };
+
+                        state.render_graph.add_pass(Box::new(geometry_pass));
+
+                        self.resources.lock().unwrap().upload_all(&state.device);
                 }
         }
 
@@ -768,7 +784,7 @@ impl EngineBuilder
         /// initialization.
         pub fn new() -> Self
         {
-                let resources = Resources::new();
+                let resources = Arc::new(Mutex::new(Resources::new()));
 
                 Self {
                         engine: Engine {

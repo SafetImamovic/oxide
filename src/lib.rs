@@ -235,7 +235,10 @@ pub fn run_oxide() -> anyhow::Result<()>
 
         let mesh_pentagon = Mesh::new("pentagon", PENTAGON.to_vec(), P_INDICES.to_vec());
 
-        engine.resources.add_mesh("Pentagon", mesh_pentagon);
+        engine.resources
+                .lock()
+                .unwrap()
+                .add_mesh("pentagon", mesh_pentagon);
 
         let runner = crate::engine::EngineRunner::new(engine)?;
 

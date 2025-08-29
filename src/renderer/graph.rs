@@ -1,5 +1,9 @@
+use std::sync::{Arc, Mutex};
+
 use derivative::Derivative;
 use egui_wgpu::Renderer;
+
+use crate::resource::Resources;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -161,6 +165,7 @@ pub struct GeometryPass
         pub name: String,
         pub enabled: bool,
         pub pipeline: wgpu::RenderPipeline,
+        pub resources: Arc<Mutex<Resources>>,
 }
 
 impl RenderPass for GeometryPass
@@ -205,5 +210,35 @@ impl RenderPass for GeometryPass
         )
         {
                 //log::info!("Geometry pass recording!");
+
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some(&self.name),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Load,
+                                        store: wgpu::StoreOp::Store,
+                                },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                });
+
+                render_pass.set_pipeline(&self.pipeline);
+
+                let mesh = self.resources.lock().unwrap();
+
+                let mesh = mesh.meshes.get("pentagon").unwrap();
+
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer().unwrap().slice(..));
+
+                render_pass.set_index_buffer(
+                        mesh.index_buffer().unwrap().slice(..),
+                        mesh.index_format,
+                );
+
+                render_pass.draw_indexed(0..mesh.get_index_count(), 0, 0..1);
         }
 }
