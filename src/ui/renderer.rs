@@ -130,6 +130,9 @@ impl GuiRenderer
 
                 let tris = self.state.egui_ctx().tessellate(full_output.shapes, self.context().pixels_per_point());
 
+                //log::info!("Triangles Pre: {}", tris.len());
+                //log::info!("Textures alive Pre: {}", full_output.textures_delta.set.len());
+
                 for (id, image_delta) in &full_output.textures_delta.set
                 {
                         self.renderer
@@ -156,12 +159,16 @@ impl GuiRenderer
 
                 self.renderer
                         .render(&mut rpass.forget_lifetime(), &tris, &screen_descriptor);
+
                 for x in &full_output.textures_delta.free
                 {
                         self.renderer.free_texture(x)
                 }
 
                 self.frame_started = false;
+
+                //log::info!("Triangles Post: {}", tris.len());
+                //log::info!("Textures alive Pre: {}", full_output.textures_delta.set.len());
         }
 
         pub fn render(&mut self, graph: &mut RenderGraph, ui_scale: &mut f32)

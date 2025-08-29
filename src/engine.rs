@@ -123,7 +123,6 @@ pub struct Engine
 
         pub ui_scale: f32,
 
-
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
         pub window: Option<Arc<winit::window::Window>>,
@@ -167,9 +166,6 @@ impl Engine
                 self.resources.meshes.insert(name.to_string(), mesh);
         }
 
-
-
-
         pub fn render(&mut self) -> anyhow::Result<(), wgpu::SurfaceError>
         {
                 let state = self.state.as_mut().unwrap();
@@ -208,11 +204,7 @@ impl Engine
                                         label: Some("Main Render Encoder"),
                                 });
 
-
-
                 state.render_graph.execute(&view, &mut encoder);
-
-
 
                 // Diabolical levels of indentation.
                 {
@@ -242,7 +234,6 @@ impl Engine
                         */
                 }
 
-
                 let scale = self.window.as_ref().unwrap().scale_factor() as f32;
 
                 let pixels_per_point = self.ui_scale;
@@ -253,13 +244,15 @@ impl Engine
                                 state.surface_configuration.height,
                         ],
                         pixels_per_point, /* inversely counteracts the
-                                                        * Browser DPI */
+                                           * Browser DPI */
                 };
 
                 {
-                        state.gui.begin_frame(self.window.as_ref().unwrap(), &mut self.ui_scale);
+                        state.gui
+                                .begin_frame(self.window.as_ref().unwrap(), &mut self.ui_scale);
 
-                        state.gui.render(&mut state.render_graph, &mut self.ui_scale);
+                        state.gui
+                                .render(&mut state.render_graph, &mut self.ui_scale);
 
                         state.gui.end_frame_and_draw(
                                 &state.device,
@@ -277,7 +270,6 @@ impl Engine
 
                 Ok(())
         }
-
 
         fn resize(&mut self)
         {
@@ -419,8 +411,7 @@ impl EngineState
 
                 let surface = instance.create_surface(window.clone())?;
 
-                let adapter = EngineBuilder::adapter(&instance, window.clone())
-                        .await?;
+                let adapter = EngineBuilder::adapter(&instance, window.clone()).await?;
 
                 Self::log_adapter_info(&adapter);
 
@@ -440,7 +431,7 @@ impl EngineState
                 );
 
                 let render_pipeline =
-                    PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
+                        PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
 
                 let bg_pass = BackgroundPass {
                         name: "bg_pass".to_string(),
@@ -478,7 +469,9 @@ impl EngineState
                         pipeline: render_pipeline.render_pipeline,
                 };
 
-                let mut render_graph = RenderGraph { passes: vec![] };
+                let mut render_graph = RenderGraph {
+                        passes: vec![],
+                };
 
                 render_graph.add_pass(Box::new(bg_pass));
                 render_graph.add_pass(Box::new(bg_pass_2));
@@ -584,7 +577,6 @@ impl ApplicationHandler<EngineState> for Engine
                         self.state = Some(pollster::block_on(EngineState::new(window)).unwrap());
                 }
 
-
                 #[cfg(target_arch = "wasm32")]
                 {
                         // In WASM builds, async tasks must be spawned without blocking.
@@ -632,7 +624,8 @@ impl ApplicationHandler<EngineState> for Engine
                         None => return,
                 };
 
-                state.gui.handle_input(&self.window.as_ref().unwrap(), &event);
+                state.gui
+                        .handle_input(&self.window.as_ref().unwrap(), &event);
 
                 match event
                 {
@@ -647,11 +640,26 @@ impl ApplicationHandler<EngineState> for Engine
                         }
                         WindowEvent::RedrawRequested =>
                         {
+                                #[cfg(not(target_arch = "wasm32"))]
+                                let start = std::time::Instant::now();
+
                                 match self.render()
                                 {
                                         Ok(_) =>
-                                        {}
-                                        // Reconfigure the surface if it's lost or outdated
+                                        {
+                                                #[cfg(not(target_arch = "wasm32"))]
+                                                {
+                                                        let duration = start.elapsed();
+
+                                                        let fps = 1.0 / duration.as_secs_f32();
+
+                                                        log::info!(
+                                                                "Render frame took: {:.2} ms, FPS: {:.1}",
+                                                                duration.as_secs_f64() * 1000.0,
+                                                                fps
+                                                        );
+                                                }
+                                        }
                                         Err(
                                                 wgpu::SurfaceError::Lost
                                                 | wgpu::SurfaceError::Outdated,
@@ -756,7 +764,7 @@ impl EngineBuilder
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 resources,
-                                ui_scale: 2.0,
+                                ui_scale: 1.5,
                                 state: None,
                                 time: None,
                                 render_ctx: None,
