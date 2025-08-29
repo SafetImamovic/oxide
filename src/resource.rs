@@ -16,4 +16,13 @@ impl Resources
                         meshes: HashMap::new(),
                 }
         }
+
+        pub fn add_mesh(
+                &mut self,
+                name: &str,
+                mesh: Mesh,
+        )
+        {
+                self.meshes.insert(name.to_string(), mesh);
+        }
 }

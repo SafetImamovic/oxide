@@ -28,6 +28,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::geometry::mesh::Mesh;
 use crate::renderer::graph::BackgroundPass;
+use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
 use crate::ui::renderer::GuiRenderer;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
@@ -157,15 +158,6 @@ pub struct Engine
 
 impl Engine
 {
-        pub fn add_mesh(
-                &mut self,
-                name: &str,
-                mesh: Mesh,
-        )
-        {
-                self.resources.meshes.insert(name.to_string(), mesh);
-        }
-
         pub fn render(&mut self) -> anyhow::Result<(), wgpu::SurfaceError>
         {
                 let state = self.state.as_mut().unwrap();
@@ -208,12 +200,12 @@ impl Engine
 
                 // Diabolical levels of indentation.
                 {
-
                         /*
                         for (k, v) in &self.resources.meshes
                         {
                                 state.vertex_buffers
                                         .push(v.new_vertex_buffer(&state.device));
+
                                 state.index_buffers.push(v.new_index_buffer(&state.device));
                         }
 
@@ -229,10 +221,11 @@ impl Engine
                                 wgpu::IndexFormat::Uint16,
                         );
 
-
                         render_pass.draw(0..pentagon.get_num_vertices(), 0..1);
                         */
                 }
+
+                // ------------------ GUI ----------------------
 
                 let scale = self.window.as_ref().unwrap().scale_factor() as f32;
 
@@ -466,6 +459,12 @@ impl EngineState
                                 b: 1.0,
                                 a: 1.0,
                         },
+                        pipeline: render_pipeline.render_pipeline.clone(),
+                };
+
+                let geometry_pass = GeometryPass {
+                        name: "geometry_pass".to_string(),
+                        enabled: true,
                         pipeline: render_pipeline.render_pipeline,
                 };
 
@@ -476,6 +475,7 @@ impl EngineState
                 render_graph.add_pass(Box::new(bg_pass));
                 render_graph.add_pass(Box::new(bg_pass_2));
                 render_graph.add_pass(Box::new(bg_pass_3));
+                render_graph.add_pass(Box::new(geometry_pass));
 
                 let gui = GuiRenderer::new(&device, surface_configuration.format, None, 1, &window);
 
@@ -519,9 +519,16 @@ impl ApplicationHandler<EngineState> for Engine
                                 .clone()
                                 .expect("Window doesn't exist.")
                                 .request_redraw();
-                }
 
-                self.state = Some(event);
+                        self.state = Some(event);
+
+                        let device: &wgpu::Device = &self.state.as_ref().unwrap().device;
+
+                        for mesh in self.resources.meshes.values_mut()
+                        {
+                                mesh.upload(device, wgpu::BufferUsages::COPY_DST);
+                        }
+                }
         }
 
         fn resumed(
@@ -607,6 +614,16 @@ impl ApplicationHandler<EngineState> for Engine
                                 web_sys::console::log_1(
                                         &"Proxy is None, skipping async init".into(),
                                 );
+                        }
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                        let device: &wgpu::Device = &self.state.as_ref().unwrap().device;
+
+                        for mesh in self.resources.meshes.values_mut()
+                        {
+                                mesh.upload(device, wgpu::BufferUsages::COPY_DST);
                         }
                 }
         }

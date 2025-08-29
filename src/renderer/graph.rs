@@ -44,7 +44,10 @@ pub trait RenderPass
 {
         fn name(&self) -> &str;
 
-        fn ui(&mut self, ui: &mut egui::Ui);
+        fn ui(
+                &mut self,
+                ui: &mut egui::Ui,
+        );
 
         fn enabled(&mut self) -> bool;
 
@@ -76,39 +79,43 @@ impl RenderPass for BackgroundPass
                 self.name.as_str()
         }
 
-        fn ui(&mut self, ui: &mut egui::Ui) {
+        fn ui(
+                &mut self,
+                ui: &mut egui::Ui,
+        )
+        {
                 egui::CollapsingHeader::new(&self.name)
-                    .default_open(true)
-                    .show(ui, |ui| {
-                            // Enable/disable pass
+                        .default_open(true)
+                        .show(ui, |ui| {
+                                // Enable/disable pass
 
-                            // Interactive color picker
-                            let mut color = [
-                                    self.clear_color.r as f32,
-                                    self.clear_color.g as f32,
-                                    self.clear_color.b as f32,
-                                    self.clear_color.a as f32,
-                            ];
+                                // Interactive color picker
+                                let mut color = [
+                                        self.clear_color.r as f32,
+                                        self.clear_color.g as f32,
+                                        self.clear_color.b as f32,
+                                        self.clear_color.a as f32,
+                                ];
 
-                            ui.horizontal(|ui| {
-                                    ui.label("Color");
-                                    if ui.color_edit_button_rgba_unmultiplied(&mut color).changed() {
-                                            self.clear_color = wgpu::Color {
-                                                    r: color[0] as f64,
-                                                    g: color[1] as f64,
-                                                    b: color[2] as f64,
-                                                    a: color[3] as f64,
-                                            };
-                                    }
-                            });
+                                ui.horizontal(|ui| {
+                                        ui.label("Color");
+                                        if ui.color_edit_button_rgba_unmultiplied(&mut color)
+                                                .changed()
+                                        {
+                                                self.clear_color = wgpu::Color {
+                                                        r: color[0] as f64,
+                                                        g: color[1] as f64,
+                                                        b: color[2] as f64,
+                                                        a: color[3] as f64,
+                                                };
+                                        }
+                                });
 
-                            // Info fields
-                            ui.label("LoadOp: Clear");
-                            ui.label("StoreOp: Store");
-                            ui.label("Depth/stencil attachment: None");
-
-
-                    });
+                                // Info fields
+                                ui.label("LoadOp: Clear");
+                                ui.label("StoreOp: Store");
+                                ui.label("Depth/stencil attachment: None");
+                        });
         }
 
         fn enabled(&mut self) -> bool
@@ -146,7 +153,57 @@ impl RenderPass for BackgroundPass
                 });
 
                 render_pass.set_pipeline(&self.pipeline);
-
         }
 }
 
+pub struct GeometryPass
+{
+        pub name: String,
+        pub enabled: bool,
+        pub pipeline: wgpu::RenderPipeline,
+}
+
+impl RenderPass for GeometryPass
+{
+        fn name(&self) -> &str
+        {
+                self.name.as_str()
+        }
+
+        fn ui(
+                &mut self,
+                ui: &mut egui::Ui,
+        )
+        {
+                egui::CollapsingHeader::new(&self.name)
+                        .default_open(true)
+                        .show(ui, |ui| {
+                                // Info fields
+                                ui.label("LoadOp: Clear");
+                                ui.label("StoreOp: Store");
+                                ui.label("Depth/stencil attachment: None");
+                        });
+        }
+
+        fn enabled(&mut self) -> bool
+        {
+                self.enabled
+        }
+
+        fn set_enabled(
+                &mut self,
+                value: bool,
+        )
+        {
+                self.enabled = value
+        }
+
+        fn record(
+                &mut self,
+                view: &wgpu::TextureView,
+                encoder: &mut wgpu::CommandEncoder,
+        )
+        {
+                //log::info!("Geometry pass recording!");
+        }
+}

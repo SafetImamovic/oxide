@@ -199,11 +199,6 @@ pub const PENTAGON: &[Vertex] = &[
 
 pub const P_INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
-pub const MESH: Mesh = Mesh {
-        vertices: PENTAGON,
-        indices: P_INDICES,
-};
-
 pub fn run_oxide() -> anyhow::Result<()>
 {
         crate::utils::bootstrap::config_logging();
@@ -238,7 +233,9 @@ pub fn run_oxide() -> anyhow::Result<()>
 
         let mut engine = crate::engine::EngineBuilder::new().build().unwrap();
 
-        engine.add_mesh("Pentagon", MESH);
+        let mesh_pentagon = Mesh::new("pentagon", PENTAGON.to_vec(), P_INDICES.to_vec());
+
+        engine.resources.add_mesh("Pentagon", mesh_pentagon);
 
         let runner = crate::engine::EngineRunner::new(engine)?;
 
