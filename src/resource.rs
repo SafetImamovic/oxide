@@ -25,4 +25,15 @@ impl Resources
         {
                 self.meshes.insert(name.to_string(), mesh);
         }
+
+        pub fn upload_all(
+                &mut self,
+                device: &wgpu::Device,
+        )
+        {
+                for mesh in self.meshes.values_mut()
+                {
+                        mesh.upload(&device, wgpu::BufferUsages::COPY_DST);
+                }
+        }
 }

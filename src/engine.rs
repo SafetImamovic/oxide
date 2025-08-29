@@ -524,10 +524,7 @@ impl ApplicationHandler<EngineState> for Engine
 
                         let device: &wgpu::Device = &self.state.as_ref().unwrap().device;
 
-                        for mesh in self.resources.meshes.values_mut()
-                        {
-                                mesh.upload(device, wgpu::BufferUsages::COPY_DST);
-                        }
+                        self.resources.upload_all(&device);
                 }
         }
 
@@ -621,10 +618,7 @@ impl ApplicationHandler<EngineState> for Engine
                 {
                         let device: &wgpu::Device = &self.state.as_ref().unwrap().device;
 
-                        for mesh in self.resources.meshes.values_mut()
-                        {
-                                mesh.upload(device, wgpu::BufferUsages::COPY_DST);
-                        }
+                        self.resources.upload_all(&device);
                 }
         }
 
