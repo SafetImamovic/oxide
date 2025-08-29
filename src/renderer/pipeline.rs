@@ -109,7 +109,7 @@ impl PipelineManager
         }
 
         /// Loads the shader module data from the `wgsl` file.
-        fn load_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule
+        pub fn load_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule
         {
                 device.create_shader_module(wgpu::ShaderModuleDescriptor {
                         label: Some("Shader"),
@@ -117,7 +117,7 @@ impl PipelineManager
                 })
         }
 
-        fn get_render_pipeline_layout(
+        pub fn get_render_pipeline_layout(
                 device: &wgpu::Device,
                 bind_groups: &[&wgpu::BindGroupLayout],
         ) -> wgpu::PipelineLayout

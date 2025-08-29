@@ -179,9 +179,10 @@ impl GuiRenderer
                 graph: &mut RenderGraph,
                 ui_scale: &mut f32,
                 fill_mode: &mut FillMode,
+                features: wgpu::Features,
         )
         {
-                self.debug_window(ui_scale, fill_mode);
+                self.debug_window(ui_scale, fill_mode, features);
                 self.render_pass_window(graph);
         }
 
@@ -249,6 +250,7 @@ impl GuiRenderer
                 &mut self,
                 ui_scale: &mut f32,
                 fill_mode: &mut FillMode,
+                features: wgpu::Features,
         )
         {
                 let mut temp_fill_mode = fill_mode.clone();
@@ -269,35 +271,61 @@ impl GuiRenderer
                                         ui.horizontal(|ui| {
                                                 if ui.button("-").clicked()
                                                 {
-                                                        scale = (scale - 0.1).max(0.5); // don't go too small
+                                                        scale = (scale - 0.1).max(0.5);
                                                 }
                                                 if ui.button("+").clicked()
                                                 {
-                                                        scale = (scale + 0.1).min(3.0); // don't go crazy
+                                                        scale = (scale + 0.1).min(3.0);
                                                 }
 
                                                 ui.label(format!("UI Scale: {:.1}", scale));
                                         });
 
                                         egui::ComboBox::from_label("Fill Mode")
-                                                .selected_text(format!("{:?}", &mut temp_fill_mode))
+                                                .selected_text(format!("{:?}", temp_fill_mode))
                                                 .show_ui(ui, |ui| {
+                                                        // Always allow regular fill
                                                         ui.selectable_value(
                                                                 &mut temp_fill_mode,
                                                                 FillMode::Fill,
                                                                 "Fill",
                                                         );
-                                                        ui.selectable_value(
-                                                                &mut temp_fill_mode,
-                                                                FillMode::Wireframe,
-                                                                "Wireframe",
-                                                        );
+
+                                                        // Wireframe only if POLYGON_MODE_LINE is
+                                                        // enabled
+                                                        if features.contains(
+                                                                wgpu::Features::POLYGON_MODE_LINE,
+                                                        )
+                                                        {
+                                                                ui.selectable_value(
+                                                                        &mut temp_fill_mode,
+                                                                        FillMode::Wireframe,
+                                                                        "Wireframe",
+                                                                );
+                                                        }
+
+                                                        // Point fill only if POLYGON_MODE_POINT is
+                                                        // enabled
+                                                        if features.contains(
+                                                                wgpu::Features::POLYGON_MODE_POINT,
+                                                        )
+                                                        {
+                                                                ui.selectable_value(
+                                                                        &mut temp_fill_mode,
+                                                                        FillMode::Vertex,
+                                                                        "Vertex",
+                                                                );
+                                                        }
                                                 });
                                 });
                 }
 
                 *ui_scale = scale;
-                *fill_mode = temp_fill_mode;
+
+                if *fill_mode != temp_fill_mode
+                {
+                        *fill_mode = temp_fill_mode;
+                }
         }
 
         #[cfg(target_arch = "wasm32")]

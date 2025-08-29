@@ -211,33 +211,6 @@ impl Engine
 
                 state.render_graph.execute(&view, &mut encoder);
 
-                // Diabolical levels of indentation.
-                {
-                        /*
-                        for (k, v) in &self.resources.meshes
-                        {
-                                state.vertex_buffers
-                                        .push(v.new_vertex_buffer(&state.device));
-
-                                state.index_buffers.push(v.new_index_buffer(&state.device));
-                        }
-
-                        let pentagon = self.resources.meshes.get("Pentagon").unwrap();
-
-                        render_pass.set_vertex_buffer(
-                                0,
-                                state.vertex_buffers.get(0).unwrap().slice(..),
-                        );
-
-                        render_pass.set_index_buffer(
-                                state.index_buffers.get(0).unwrap().slice(..),
-                                wgpu::IndexFormat::Uint16,
-                        );
-
-                        render_pass.draw(0..pentagon.get_num_vertices(), 0..1);
-                        */
-                }
-
                 // ------------------ GUI ----------------------
 
                 let scale = self.window.as_ref().unwrap().scale_factor() as f32;
@@ -254,14 +227,42 @@ impl Engine
                 };
 
                 {
+                        let supported = state.adapter.features();
+                        let desired = wgpu::Features::POLYGON_MODE_LINE
+                                | wgpu::Features::POLYGON_MODE_POINT;
+                        let enabled_features = supported & desired;
+
                         state.gui
                                 .begin_frame(self.window.as_ref().unwrap(), &mut self.ui_scale);
+
+                        let temp_fill_mode = self.fill_mode;
 
                         state.gui.render(
                                 &mut state.render_graph,
                                 &mut self.ui_scale,
                                 &mut self.fill_mode,
+                                enabled_features,
                         );
+
+                        if temp_fill_mode != self.fill_mode
+                        {
+                                log::info!("Fill Mode: {:?}", self.fill_mode);
+                                // Request Pipeline Rebuild
+
+                                for pass in &mut state.render_graph.passes
+                                {
+                                        if let Some(geom) =
+                                                pass.as_any_mut().downcast_mut::<GeometryPass>()
+                                        {
+                                                geom.rebuild_pipeline(
+                                                        &state.device,
+                                                        &state.surface_configuration,
+                                                        self.fill_mode,
+                                                        &[],
+                                                );
+                                        }
+                                }
+                        }
 
                         state.gui.end_frame_and_draw(
                                 &state.device,
@@ -298,33 +299,6 @@ impl Engine
                 {
                         let size = self.window.as_ref().unwrap().inner_size();
                         self._resize(size.width, size.height);
-                }
-        }
-
-        pub fn query_polygon_modes(
-                &mut self,
-                log: bool,
-        )
-        {
-                let state = self.state.as_ref().unwrap();
-
-                let modes = state.get_adapter_features();
-
-                for i in modes.iter()
-                {
-                        self.features.push(i);
-                }
-
-                if !log
-                {
-                        return;
-                }
-
-                log::info!("Platform Specific Features:");
-
-                for i in &self.features
-                {
-                        log::info!("\t{}", i);
                 }
         }
 
@@ -572,8 +546,6 @@ impl ApplicationHandler<EngineState> for Engine
 
                         self.state = Some(event);
 
-                        self.query_polygon_modes();
-
                         let state = self.state.as_mut().unwrap();
 
                         let device: &wgpu::Device = &state.device;
@@ -693,8 +665,6 @@ impl ApplicationHandler<EngineState> for Engine
 
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                        self.query_polygon_modes(true);
-
                         let state = self.state.as_mut().unwrap();
 
                         let depth_texture = crate::texture::Texture::create_depth_texture(
@@ -1035,9 +1005,23 @@ impl EngineBuilder
                 adapter: &wgpu::Adapter
         ) -> anyhow::Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>
         {
+                let supported = adapter.features();
+
+                log::info!("Platform Specific Features: ");
+
+                for i in supported.iter()
+                {
+                        log::info!("\t{}", i);
+                }
+
+                let desired =
+                        wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::POLYGON_MODE_POINT;
+
+                let required_features = supported & desired;
+
                 adapter.request_device(&wgpu::DeviceDescriptor {
                         label: None,
-                        required_features: Features::POLYGON_MODE_LINE,
+                        required_features,
                         // WebGL doesn't support all of wgpu's features, so if
                         // we're building for the web we'll have to disable some.
                         // Describes the limit of certain types of resources that we can
@@ -1060,6 +1044,13 @@ impl EngineBuilder
                         trace: wgpu::Trace::Off,
                 })
                 .await
+        }
+
+        fn combine_features(features: &Vec<wgpu::Features>) -> wgpu::Features
+        {
+                features.iter()
+                        .copied()
+                        .fold(wgpu::Features::empty(), |acc, f| acc | f)
         }
 
         fn texture_format(surface_caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat
