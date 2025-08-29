@@ -182,79 +182,19 @@ impl GuiRenderer
                 features: wgpu::Features,
         )
         {
-                self.debug_window(ui_scale, fill_mode, features);
-                self.render_pass_window(graph);
-        }
-
-        pub fn render_pass_window(
-                &mut self,
-                graph: &mut RenderGraph,
-        )
-        {
-                egui::Window::new("Render Pass Graph")
-                        .resizable(true)
-                        .scroll(true)
-                        .show(self.context(), |ui| {
-                                // Read length before starting iter_mut() to avoid E0502.
-                                let len = graph.passes.len();
-
-                                // Defer reordering until after the loop.
-                                let mut move_req: Option<(usize, isize)> = None;
-
-                                for (i, pass) in graph.passes.iter_mut().enumerate()
-                                {
-                                        let mut enabled = pass.enabled();
-
-                                        ui.horizontal(|ui| {
-                                                pass.ui(ui);
-
-                                                // Right-aligned block for the buttons
-                                                ui.with_layout(
-                                                        egui::Layout::right_to_left(
-                                                                egui::Align::Center,
-                                                        ),
-                                                        |ui| {
-                                                                ui.checkbox(
-                                                                        &mut enabled,
-                                                                        "Enabled",
-                                                                );
-
-                                                                if ui.button("v").clicked()
-                                                                        && i + 1 < len
-                                                                {
-                                                                        move_req = Some((i, 1));
-                                                                }
-                                                                if ui.button("^").clicked() && i > 0
-                                                                {
-                                                                        move_req = Some((i, -1));
-                                                                }
-                                                        },
-                                                );
-                                        });
-
-                                        ui.separator();
-
-                                        pass.set_enabled(enabled);
-                                }
-
-                                // Now the iterator is dropped, so we can safely mutate the Vec.
-                                if let Some((i, d)) = move_req
-                                {
-                                        let j = (i as isize + d) as usize;
-                                        graph.passes.swap(i, j);
-                                }
-                        });
+                self.debug_window(graph, ui_scale, fill_mode, features);
         }
 
         pub fn debug_window(
                 &mut self,
+                graph: &mut RenderGraph,
                 ui_scale: &mut f32,
                 fill_mode: &mut FillMode,
                 features: wgpu::Features,
         )
         {
-                let mut temp_fill_mode = fill_mode.clone();
-                let mut scale: f32 = ui_scale.clone();
+                let mut temp_fill_mode = *fill_mode;
+                let mut scale: f32 = *ui_scale;
 
                 egui::Area::new("nice".into())
                         .fixed_pos(egui::pos2(10.0, 10.0))
@@ -264,64 +204,95 @@ impl GuiRenderer
 
                 if self.show_right_panel
                 {
-                        egui::Window::new("Right Panel")
-                                .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
-                                .default_width(300.0)
-                                .show(self.context(), |ui| {
-                                        ui.horizontal(|ui| {
-                                                if ui.button("-").clicked()
-                                                {
-                                                        scale = (scale - 0.1).max(0.5);
-                                                }
-                                                if ui.button("+").clicked()
-                                                {
-                                                        scale = (scale + 0.1).min(3.0);
-                                                }
+                        egui::SidePanel::right("Right Panel").show(self.context(), |ui| {
+                                // UI scale controls
+                                ui.horizontal(|ui| {
+                                        if ui.button(egui::RichText::new("[   -   ]").strong().text_style(egui::TextStyle::Monospace))
+                                                .clicked()
+                                        {
+                                                scale = (scale - 0.1).max(0.5);
+                                        }
+                                        if ui.button(egui::RichText::new("[   +   ]").strong().text_style(egui::TextStyle::Monospace))
+                                                .clicked()
+                                        {
+                                                scale = (scale + 0.1).min(3.0);
+                                        }
+                                        ui.label(format!("UI Scale: {:.1}", scale));
+                                });
 
-                                                ui.label(format!("UI Scale: {:.1}", scale));
-                                        });
-
-                                        egui::ComboBox::from_label("Fill Mode")
-                                                .selected_text(format!("{:?}", temp_fill_mode))
-                                                .show_ui(ui, |ui| {
-                                                        // Always allow regular fill
+                                // Fill mode
+                                egui::ComboBox::from_label("Fill Mode")
+                                        .selected_text(format!("{:?}", temp_fill_mode))
+                                        .show_ui(ui, |ui| {
+                                                ui.selectable_value(
+                                                        &mut temp_fill_mode,
+                                                        FillMode::Fill,
+                                                        "Fill",
+                                                );
+                                                if features
+                                                        .contains(wgpu::Features::POLYGON_MODE_LINE)
+                                                {
                                                         ui.selectable_value(
                                                                 &mut temp_fill_mode,
-                                                                FillMode::Fill,
-                                                                "Fill",
+                                                                FillMode::Wireframe,
+                                                                "Wireframe",
                                                         );
+                                                }
+                                                if features.contains(
+                                                        wgpu::Features::POLYGON_MODE_POINT,
+                                                )
+                                                {
+                                                        ui.selectable_value(
+                                                                &mut temp_fill_mode,
+                                                                FillMode::Vertex,
+                                                                "Vertex",
+                                                        );
+                                                }
+                                        });
 
-                                                        // Wireframe only if POLYGON_MODE_LINE is
-                                                        // enabled
-                                                        if features.contains(
-                                                                wgpu::Features::POLYGON_MODE_LINE,
-                                                        )
-                                                        {
-                                                                ui.selectable_value(
-                                                                        &mut temp_fill_mode,
-                                                                        FillMode::Wireframe,
-                                                                        "Wireframe",
-                                                                );
-                                                        }
+                                // Collapsible section for passes
+                                egui::CollapsingHeader::new("Render Pass Graph")
+                                        .default_open(false)
+                                        .show(ui, |ui| {
+                                                let len = graph.passes.len();
+                                                let mut move_req: Option<(usize, isize)> = None;
 
-                                                        // Point fill only if POLYGON_MODE_POINT is
-                                                        // enabled
-                                                        if features.contains(
-                                                                wgpu::Features::POLYGON_MODE_POINT,
-                                                        )
-                                                        {
-                                                                ui.selectable_value(
-                                                                        &mut temp_fill_mode,
-                                                                        FillMode::Vertex,
-                                                                        "Vertex",
-                                                                );
-                                                        }
-                                                });
-                                });
+                                                for (i, pass) in graph.passes.iter_mut().enumerate()
+                                                {
+                                                        let mut enabled = pass.enabled();
+
+                                                        ui.horizontal(|ui| {
+                                                                pass.ui(ui);
+
+                                                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.checkbox(&mut enabled, "Enabled");
+
+                                        if ui.button(egui::RichText::new("[ v ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i + 1 < len {
+                                            move_req = Some((i, 1));
+                                        }
+                                        if ui.button(egui::RichText::new("[ ^ ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i > 0 {
+                                            move_req = Some((i, -1));
+                                        }
+                                    },
+                                );
+                                                        });
+
+                                                        ui.separator();
+                                                        pass.set_enabled(enabled);
+                                                }
+
+                                                if let Some((i, d)) = move_req
+                                                {
+                                                        let j = (i as isize + d) as usize;
+                                                        graph.passes.swap(i, j);
+                                                }
+                                        });
+                        });
                 }
 
                 *ui_scale = scale;
-
                 if *fill_mode != temp_fill_mode
                 {
                         *fill_mode = temp_fill_mode;

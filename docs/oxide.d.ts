@@ -40,9 +40,9 @@ export interface InitOutput {
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_6: WebAssembly.Table;
   readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h1906bbbc873e7667: (a: number, b: number) => void;
-  readonly closure2883_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure2885_externref_shim: (a: number, b: number, c: any, d: any) => void;
-  readonly closure3057_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure2892_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure2894_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure3066_externref_shim: (a: number, b: number, c: any) => void;
   readonly __wbindgen_start: () => void;
 }
 
