@@ -33,7 +33,10 @@ impl Resources
         {
                 for mesh in self.meshes.values_mut()
                 {
-                        mesh.upload(&device, wgpu::BufferUsages::COPY_DST);
+                        if mesh.needs_upload()
+                        {
+                                mesh.upload(&device, wgpu::BufferUsages::COPY_DST);
+                        }
                 }
         }
 }

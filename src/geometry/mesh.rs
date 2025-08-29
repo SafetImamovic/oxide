@@ -16,6 +16,8 @@ pub struct Mesh
         index_count: u32,
         vertex_count: u32,
         index_format: wgpu::IndexFormat,
+
+        needs_upload: bool,
 }
 
 impl Mesh
@@ -40,7 +42,13 @@ impl Mesh
                         vertex_count,
                         index_count,
                         index_format: wgpu::IndexFormat::Uint16,
+                        needs_upload: true,
                 }
+        }
+
+        pub fn needs_upload(&self) -> bool
+        {
+                self.needs_upload
         }
 
         pub fn get_index_count(&self) -> u32
@@ -74,6 +82,11 @@ impl Mesh
                 usage: wgpu::BufferUsages,
         )
         {
+                if !self.needs_upload
+                {
+                        return;
+                }
+
                 log::info!("Vertex and Index buffers created for mesh::{}", self.name);
 
                 self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
@@ -87,5 +100,7 @@ impl Mesh
                         contents: bytemuck::cast_slice(&self.indices),
                         usage: wgpu::BufferUsages::INDEX | usage,
                 }));
+
+                self.needs_upload = false;
         }
 }
