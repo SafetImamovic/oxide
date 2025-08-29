@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::engine::FillMode;
+use crate::renderer::graph::RenderGraph;
 use derivative::Derivative;
 use egui::Context;
 use egui_wgpu::Renderer;
@@ -13,7 +15,6 @@ use wgpu::TextureFormat;
 use wgpu::TextureView;
 use winit::event::WindowEvent;
 use winit::window::Window;
-use crate::renderer::graph::RenderGraph;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -64,8 +65,6 @@ impl GuiRenderer
                         true,
                 );
 
-
-
                 GuiRenderer {
                         show_right_panel: true,
                         state: egui_state,
@@ -94,7 +93,7 @@ impl GuiRenderer
         pub fn begin_frame(
                 &mut self,
                 window: &Window,
-                ui_scale: &mut f32
+                ui_scale: &mut f32,
         )
         {
                 self.ppp(self.current_pixels_per_point(window, ui_scale));
@@ -128,7 +127,10 @@ impl GuiRenderer
                 self.state
                         .handle_platform_output(&window, full_output.platform_output);
 
-                let tris = self.state.egui_ctx().tessellate(full_output.shapes, self.context().pixels_per_point());
+                let tris = self
+                        .state
+                        .egui_ctx()
+                        .tessellate(full_output.shapes, self.context().pixels_per_point());
 
                 //log::info!("Triangles Pre: {}", tris.len());
                 //log::info!("Textures alive Pre: {}", full_output.textures_delta.set.len());
@@ -168,64 +170,31 @@ impl GuiRenderer
                 self.frame_started = false;
 
                 //log::info!("Triangles Post: {}", tris.len());
-                //log::info!("Textures alive Pre: {}", full_output.textures_delta.set.len());
+                //log::info!("Textures alive Pre: {}",
+                // full_output.textures_delta.set.len());
         }
 
-        pub fn render(&mut self, graph: &mut RenderGraph, ui_scale: &mut f32)
+        pub fn render(
+                &mut self,
+                graph: &mut RenderGraph,
+                ui_scale: &mut f32,
+                fill_mode: &mut FillMode,
+                features: wgpu::Features,
+        )
         {
-                self.debug_window(ui_scale);
-                self.render_pass_window(graph);
+                self.debug_window(graph, ui_scale, fill_mode, features);
         }
 
-        pub fn render_pass_window(&mut self, graph: &mut RenderGraph) {
-                egui::Window::new("Render Pass Graph")
-                    .resizable(true)
-                    .scroll(true)
-                    .show(self.context(), |ui| {
-                            // Read length before starting iter_mut() to avoid E0502.
-                            let len = graph.passes.len();
-
-                            // Defer reordering until after the loop.
-                            let mut move_req: Option<(usize, isize)> = None;
-
-                            for (i, pass) in graph.passes.iter_mut().enumerate() {
-                                    let mut enabled = pass.enabled();
-
-                                    ui.horizontal(|ui| {
-                                            pass.ui(ui);
-
-                                            // Right-aligned block for the buttons
-                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-
-                                                    ui.checkbox(&mut enabled, "Enabled");
-
-                                                    if ui.button("v").clicked() && i + 1 < len {
-                                                            move_req = Some((i, 1));
-                                                    }
-                                                    if ui.button("^").clicked() && i > 0 {
-                                                            move_req = Some((i, -1));
-                                                    }
-                                            });
-                                    });
-
-                                    ui.separator();
-
-                                    pass.set_enabled(enabled);
-                            }
-
-                            // Now the iterator is dropped, so we can safely mutate the Vec.
-                            if let Some((i, d)) = move_req {
-                                    let j = (i as isize + d) as usize;
-                                    graph.passes.swap(i, j);
-                            }
-                    });
-        }
-
-
-
-        pub fn debug_window(&mut self, ui_scale: &mut f32)
+        pub fn debug_window(
+                &mut self,
+                graph: &mut RenderGraph,
+                ui_scale: &mut f32,
+                fill_mode: &mut FillMode,
+                features: wgpu::Features,
+        )
         {
-                let mut scale: f32 = ui_scale.clone();
+                let mut temp_fill_mode = *fill_mode;
+                let mut scale: f32 = *ui_scale;
 
                 egui::Area::new("nice".into())
                         .fixed_pos(egui::pos2(10.0, 10.0))
@@ -235,34 +204,117 @@ impl GuiRenderer
 
                 if self.show_right_panel
                 {
-                        egui::Window::new("Right Panel")
-                                .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
-                                .default_width(300.0)
-                                .show(self.context(), |ui| {
-                                        ui.horizontal(|ui| {
-                                                if ui.button("-").clicked() {
-                                                        scale = (scale - 0.1).max(0.5); // don't go too small
+                        egui::SidePanel::right("Right Panel").show(self.context(), |ui| {
+                                // UI scale controls
+                                ui.horizontal(|ui| {
+                                        if ui.button(egui::RichText::new("[   -   ]").strong().text_style(egui::TextStyle::Monospace))
+                                                .clicked()
+                                        {
+                                                scale = (scale - 0.1).max(0.5);
+                                        }
+                                        if ui.button(egui::RichText::new("[   +   ]").strong().text_style(egui::TextStyle::Monospace))
+                                                .clicked()
+                                        {
+                                                scale = (scale + 0.1).min(3.0);
+                                        }
+                                        ui.label(format!("UI Scale: {:.1}", scale));
+                                });
+
+                                // Fill mode
+                                egui::ComboBox::from_label("Fill Mode")
+                                        .selected_text(format!("{:?}", temp_fill_mode))
+                                        .show_ui(ui, |ui| {
+                                                ui.selectable_value(
+                                                        &mut temp_fill_mode,
+                                                        FillMode::Fill,
+                                                        "Fill",
+                                                );
+                                                if features
+                                                        .contains(wgpu::Features::POLYGON_MODE_LINE)
+                                                {
+                                                        ui.selectable_value(
+                                                                &mut temp_fill_mode,
+                                                                FillMode::Wireframe,
+                                                                "Wireframe",
+                                                        );
                                                 }
-                                                if ui.button("+").clicked() {
-                                                        scale = (scale + 0.1).min(3.0); // don't go crazy
+                                                if features.contains(
+                                                        wgpu::Features::POLYGON_MODE_POINT,
+                                                )
+                                                {
+                                                        ui.selectable_value(
+                                                                &mut temp_fill_mode,
+                                                                FillMode::Vertex,
+                                                                "Vertex",
+                                                        );
+                                                }
+                                        });
+
+                                // Collapsible section for passes
+                                egui::CollapsingHeader::new("Render Pass Graph")
+                                        .default_open(false)
+                                        .show(ui, |ui| {
+                                                let len = graph.passes.len();
+                                                let mut move_req: Option<(usize, isize)> = None;
+
+                                                for (i, pass) in graph.passes.iter_mut().enumerate()
+                                                {
+                                                        let mut enabled = pass.enabled();
+
+                                                        ui.horizontal(|ui| {
+                                                                pass.ui(ui);
+
+                                                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.checkbox(&mut enabled, "Enabled");
+
+                                        if ui.button(egui::RichText::new("[ v ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i + 1 < len {
+                                            move_req = Some((i, 1));
+                                        }
+                                        if ui.button(egui::RichText::new("[ ^ ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i > 0 {
+                                            move_req = Some((i, -1));
+                                        }
+                                    },
+                                );
+                                                        });
+
+                                                        ui.separator();
+                                                        pass.set_enabled(enabled);
                                                 }
 
-                                                ui.label(format!("UI Scale: {:.1}", scale));
+                                                if let Some((i, d)) = move_req
+                                                {
+                                                        let j = (i as isize + d) as usize;
+                                                        graph.passes.swap(i, j);
+                                                }
                                         });
-                                });
+                        });
                 }
 
                 *ui_scale = scale;
+                if *fill_mode != temp_fill_mode
+                {
+                        *fill_mode = temp_fill_mode;
+                }
         }
 
         #[cfg(target_arch = "wasm32")]
-        pub fn current_pixels_per_point(&self, window: &winit::window::Window, ui_scale: &mut f32) -> f32
+        pub fn current_pixels_per_point(
+                &self,
+                window: &winit::window::Window,
+                ui_scale: &mut f32,
+        ) -> f32
         {
                 web_sys::window().unwrap().device_pixel_ratio() as f32 * *ui_scale
         }
 
         #[cfg(not(target_arch = "wasm32"))]
-        pub fn current_pixels_per_point(&self, window: &winit::window::Window, ui_scale: &mut f32) -> f32
+        pub fn current_pixels_per_point(
+                &self,
+                window: &winit::window::Window,
+                ui_scale: &mut f32,
+        ) -> f32
         {
                 window.scale_factor() as f32 * ui_scale.clone()
         }

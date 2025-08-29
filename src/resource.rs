@@ -16,4 +16,27 @@ impl Resources
                         meshes: HashMap::new(),
                 }
         }
+
+        pub fn add_mesh(
+                &mut self,
+                name: &str,
+                mesh: Mesh,
+        )
+        {
+                self.meshes.insert(name.to_string(), mesh);
+        }
+
+        pub fn upload_all(
+                &mut self,
+                device: &wgpu::Device,
+        )
+        {
+                for mesh in self.meshes.values_mut()
+                {
+                        if mesh.needs_upload()
+                        {
+                                mesh.upload(&device, wgpu::BufferUsages::COPY_DST);
+                        }
+                }
+        }
 }

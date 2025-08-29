@@ -175,7 +175,6 @@ impl GuiRenderer
                 {
                         egui::Window::new("Right Panel")
                                 .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
-                                .default_width(300.0)
                                 .show(self.context(), |ui| {
                                         ui.label("Docked content");
                                 });

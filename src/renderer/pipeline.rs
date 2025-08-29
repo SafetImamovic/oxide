@@ -1,4 +1,4 @@
-use crate::geometry::vertex::Vertex;
+use crate::{engine::FillMode, geometry::vertex::Vertex};
 
 #[derive(Debug)]
 pub struct PipelineManager
@@ -13,6 +13,7 @@ impl PipelineManager
                 config: &wgpu::SurfaceConfiguration,
                 bind_groups: &[&wgpu::BindGroupLayout],
                 depth_texture: &crate::texture::Texture,
+                fill_mode: &FillMode,
         ) -> Self
         {
                 Self {
@@ -21,6 +22,7 @@ impl PipelineManager
                                 config,
                                 bind_groups,
                                 depth_texture,
+                                fill_mode,
                         ),
                 }
         }
@@ -30,8 +32,28 @@ impl PipelineManager
                 config: &wgpu::SurfaceConfiguration,
                 bind_groups: &[&wgpu::BindGroupLayout],
                 depth_texture: &crate::texture::Texture,
+                fill_mode: &FillMode,
         ) -> wgpu::RenderPipeline
         {
+                let polygon_mode = match &fill_mode
+                {
+                        FillMode::Fill => wgpu::PolygonMode::Fill,
+                        FillMode::Wireframe =>
+                        {
+                                if device
+                                        .features()
+                                        .contains(wgpu::Features::POLYGON_MODE_LINE)
+                                {
+                                        wgpu::PolygonMode::Line
+                                }
+                                else
+                                {
+                                        wgpu::PolygonMode::Fill // fallback if unsupported
+                                }
+                        }
+                        FillMode::Vertex => wgpu::PolygonMode::Point,
+                };
+
                 let shader = Self::load_shader_module(device);
 
                 let render_pipeline_layout = Self::get_render_pipeline_layout(device, bind_groups);
@@ -44,7 +66,7 @@ impl PipelineManager
                         vertex: wgpu::VertexState {
                                 module: &shader,
                                 entry_point: Some("vs_main"), // 1.
-                                buffers: &[vertex_buffer], // 2.
+                                buffers: &[vertex_buffer],    // 2.
                                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                         },
                         fragment: Some(wgpu::FragmentState {
@@ -54,7 +76,10 @@ impl PipelineManager
                                 targets: &[Some(wgpu::ColorTargetState {
                                         // 4.
                                         format: config.format,
-                                        blend: Some(wgpu::BlendState { color: wgpu::BlendComponent::OVER, alpha: wgpu::BlendComponent::OVER }),
+                                        blend: Some(wgpu::BlendState {
+                                                color: wgpu::BlendComponent::OVER,
+                                                alpha: wgpu::BlendComponent::OVER,
+                                        }),
                                         write_mask: wgpu::ColorWrites::ALL,
                                 })],
                                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -66,7 +91,7 @@ impl PipelineManager
                                 cull_mode: Some(wgpu::Face::Back),
                                 // Setting this to anything other than Fill requires
                                 // Features::NON_FILL_POLYGON_MODE
-                                polygon_mode: wgpu::PolygonMode::Fill,
+                                polygon_mode,
                                 // Requires Features::DEPTH_CLIP_CONTROL
                                 // Requires Features::CONSERVATIVE_RASTERIZATION
                                 conservative: false,
@@ -84,7 +109,7 @@ impl PipelineManager
         }
 
         /// Loads the shader module data from the `wgsl` file.
-        fn load_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule
+        pub fn load_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule
         {
                 device.create_shader_module(wgpu::ShaderModuleDescriptor {
                         label: Some("Shader"),
@@ -92,7 +117,7 @@ impl PipelineManager
                 })
         }
 
-        fn get_render_pipeline_layout(
+        pub fn get_render_pipeline_layout(
                 device: &wgpu::Device,
                 bind_groups: &[&wgpu::BindGroupLayout],
         ) -> wgpu::PipelineLayout

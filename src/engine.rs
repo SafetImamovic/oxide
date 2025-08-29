@@ -19,6 +19,7 @@
 //! This setup function is registered internally and later executed by [`run`].
 
 use std::sync::Arc;
+use std::sync::Mutex;
 use wgpu::Features;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
@@ -28,6 +29,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::geometry::mesh::Mesh;
 use crate::renderer::graph::BackgroundPass;
+use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
 use crate::ui::renderer::GuiRenderer;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
@@ -105,6 +107,14 @@ impl EngineRunner
         }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum FillMode
+{
+        Fill = 0,
+        Wireframe = 1,
+        Vertex = 2,
+}
+
 /// Main entrypoint of Oxide.
 ///
 /// To construct [`Engine`], use [`EngineBuilder`].
@@ -122,6 +132,10 @@ pub struct Engine
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
         pub ui_scale: f32,
+
+        pub fill_mode: FillMode,
+
+        pub features: Vec<wgpu::Features>,
 
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
@@ -142,7 +156,7 @@ pub struct Engine
         /// The active scene graph or world being rendered and updated.
         pub scene: Option<crate::scene::Scene>,
 
-        pub resources: Resources,
+        pub resources: Arc<Mutex<Resources>>,
 
         /// The main camera used to view the scene.
         pub camera: Option<crate::scene::camera::Camera>,
@@ -157,15 +171,6 @@ pub struct Engine
 
 impl Engine
 {
-        pub fn add_mesh(
-                &mut self,
-                name: &str,
-                mesh: Mesh,
-        )
-        {
-                self.resources.meshes.insert(name.to_string(), mesh);
-        }
-
         pub fn render(&mut self) -> anyhow::Result<(), wgpu::SurfaceError>
         {
                 let state = self.state.as_mut().unwrap();
@@ -206,33 +211,7 @@ impl Engine
 
                 state.render_graph.execute(&view, &mut encoder);
 
-                // Diabolical levels of indentation.
-                {
-
-                        /*
-                        for (k, v) in &self.resources.meshes
-                        {
-                                state.vertex_buffers
-                                        .push(v.new_vertex_buffer(&state.device));
-                                state.index_buffers.push(v.new_index_buffer(&state.device));
-                        }
-
-                        let pentagon = self.resources.meshes.get("Pentagon").unwrap();
-
-                        render_pass.set_vertex_buffer(
-                                0,
-                                state.vertex_buffers.get(0).unwrap().slice(..),
-                        );
-
-                        render_pass.set_index_buffer(
-                                state.index_buffers.get(0).unwrap().slice(..),
-                                wgpu::IndexFormat::Uint16,
-                        );
-
-
-                        render_pass.draw(0..pentagon.get_num_vertices(), 0..1);
-                        */
-                }
+                // ------------------ GUI ----------------------
 
                 let scale = self.window.as_ref().unwrap().scale_factor() as f32;
 
@@ -248,11 +227,42 @@ impl Engine
                 };
 
                 {
+                        let supported = state.adapter.features();
+                        let desired = wgpu::Features::POLYGON_MODE_LINE
+                                | wgpu::Features::POLYGON_MODE_POINT;
+                        let enabled_features = supported & desired;
+
                         state.gui
                                 .begin_frame(self.window.as_ref().unwrap(), &mut self.ui_scale);
 
-                        state.gui
-                                .render(&mut state.render_graph, &mut self.ui_scale);
+                        let temp_fill_mode = self.fill_mode;
+
+                        state.gui.render(
+                                &mut state.render_graph,
+                                &mut self.ui_scale,
+                                &mut self.fill_mode,
+                                enabled_features,
+                        );
+
+                        if temp_fill_mode != self.fill_mode
+                        {
+                                log::info!("Fill Mode: {:?}", self.fill_mode);
+                                // Request Pipeline Rebuild
+
+                                for pass in &mut state.render_graph.passes
+                                {
+                                        if let Some(geom) =
+                                                pass.as_any_mut().downcast_mut::<GeometryPass>()
+                                        {
+                                                geom.rebuild_pipeline(
+                                                        &state.device,
+                                                        &state.surface_configuration,
+                                                        self.fill_mode,
+                                                        &[],
+                                                );
+                                        }
+                                }
+                        }
 
                         state.gui.end_frame_and_draw(
                                 &state.device,
@@ -430,8 +440,13 @@ impl EngineState
                         "depth_texture",
                 );
 
-                let render_pipeline =
-                        PipelineManager::new(&device, &surface_configuration, &[], &depth_texture);
+                let render_pipeline = PipelineManager::new(
+                        &device,
+                        &surface_configuration,
+                        &[],
+                        &depth_texture,
+                        &FillMode::Wireframe,
+                );
 
                 let bg_pass = BackgroundPass {
                         name: "bg_pass".to_string(),
@@ -466,7 +481,7 @@ impl EngineState
                                 b: 1.0,
                                 a: 1.0,
                         },
-                        pipeline: render_pipeline.render_pipeline,
+                        pipeline: render_pipeline.render_pipeline.clone(),
                 };
 
                 let mut render_graph = RenderGraph {
@@ -499,6 +514,15 @@ impl EngineState
         {
                 log::info!("Adapter Info: {:#?}", adapter.get_info());
         }
+
+        /// Logs the adapter features.
+        ///
+        /// Corresponds to these WebGPU feature Reference
+        /// <https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename>
+        pub fn get_adapter_features(&self) -> wgpu::Features
+        {
+                self.adapter.features()
+        }
 }
 
 impl ApplicationHandler<EngineState> for Engine
@@ -519,9 +543,38 @@ impl ApplicationHandler<EngineState> for Engine
                                 .clone()
                                 .expect("Window doesn't exist.")
                                 .request_redraw();
-                }
 
-                self.state = Some(event);
+                        self.state = Some(event);
+
+                        let state = self.state.as_mut().unwrap();
+
+                        let device: &wgpu::Device = &state.device;
+
+                        let depth_texture = crate::texture::Texture::create_depth_texture(
+                                &state.device,
+                                &state.surface_configuration,
+                                "depth_texture",
+                        );
+
+                        let render_pipeline = PipelineManager::new(
+                                &state.device,
+                                &state.surface_configuration,
+                                &[],
+                                &depth_texture,
+                                &self.fill_mode,
+                        );
+
+                        let geometry_pass = GeometryPass {
+                                name: "geometry_pass".to_string(),
+                                enabled: true,
+                                pipeline: render_pipeline.render_pipeline,
+                                resources: self.resources.clone(),
+                        };
+
+                        state.render_graph.add_pass(Box::new(geometry_pass));
+
+                        self.resources.lock().unwrap().upload_all(&state.device);
+                }
         }
 
         fn resumed(
@@ -608,6 +661,36 @@ impl ApplicationHandler<EngineState> for Engine
                                         &"Proxy is None, skipping async init".into(),
                                 );
                         }
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                        let state = self.state.as_mut().unwrap();
+
+                        let depth_texture = crate::texture::Texture::create_depth_texture(
+                                &state.device,
+                                &state.surface_configuration,
+                                "depth_texture",
+                        );
+
+                        let render_pipeline = PipelineManager::new(
+                                &state.device,
+                                &state.surface_configuration,
+                                &[],
+                                &depth_texture,
+                                &self.fill_mode,
+                        );
+
+                        let geometry_pass = GeometryPass {
+                                name: "geometry_pass".to_string(),
+                                enabled: true,
+                                pipeline: render_pipeline.render_pipeline,
+                                resources: self.resources.clone(),
+                        };
+
+                        state.render_graph.add_pass(Box::new(geometry_pass));
+
+                        self.resources.lock().unwrap().upload_all(&state.device);
                 }
         }
 
@@ -757,13 +840,15 @@ impl EngineBuilder
         /// initialization.
         pub fn new() -> Self
         {
-                let resources = Resources::new();
+                let resources = Arc::new(Mutex::new(Resources::new()));
 
                 Self {
                         engine: Engine {
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 resources,
+                                fill_mode: FillMode::Fill,
+                                features: vec![],
                                 ui_scale: 1.5,
                                 state: None,
                                 time: None,
@@ -920,9 +1005,23 @@ impl EngineBuilder
                 adapter: &wgpu::Adapter
         ) -> anyhow::Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>
         {
+                let supported = adapter.features();
+
+                log::info!("Platform Specific Features: ");
+
+                for i in supported.iter()
+                {
+                        log::info!("\t{}", i);
+                }
+
+                let desired =
+                        wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::POLYGON_MODE_POINT;
+
+                let required_features = supported & desired;
+
                 adapter.request_device(&wgpu::DeviceDescriptor {
                         label: None,
-                        required_features: Features::empty(),
+                        required_features,
                         // WebGL doesn't support all of wgpu's features, so if
                         // we're building for the web we'll have to disable some.
                         // Describes the limit of certain types of resources that we can
@@ -945,6 +1044,13 @@ impl EngineBuilder
                         trace: wgpu::Trace::Off,
                 })
                 .await
+        }
+
+        fn combine_features(features: &Vec<wgpu::Features>) -> wgpu::Features
+        {
+                features.iter()
+                        .copied()
+                        .fold(wgpu::Features::empty(), |acc, f| acc | f)
         }
 
         fn texture_format(surface_caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat
