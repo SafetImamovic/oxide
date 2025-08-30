@@ -1,4 +1,3 @@
-pub mod camera;
 pub mod config;
 pub mod engine;
 pub mod geometry;
@@ -32,20 +31,17 @@ pub mod utils;
 /// are only compiled for WebAssembly builds, keeping native
 /// binaries clean and free of unnecessary dependencies.
 #[cfg(target_arch = "wasm32")]
-use winit::platform::web::EventLoopExtWebSys;
-
-#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 use crate::{
         config::Config,
         geometry::{
                 mesh::{Mesh, Primitive},
-                vertex::Vertex,
         },
-        utils::exit::get_exit_message,
 };
-use winit::event_loop::EventLoop;
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::utils::exit::get_exit_message;
 
 #[cfg(target_arch = "wasm32")]
 pub fn get_body_size() -> Option<(u32, u32)>
@@ -67,9 +63,9 @@ pub fn get_body_size() -> Option<(u32, u32)>
 
 pub fn run_oxide() -> anyhow::Result<()>
 {
-        crate::utils::bootstrap::config_logging();
+        utils::bootstrap::config_logging();
 
-        crate::utils::bootstrap::show_start_message();
+        utils::bootstrap::show_start_message();
 
         /*
         let mut engine = Engine::new();
@@ -97,7 +93,7 @@ pub fn run_oxide() -> anyhow::Result<()>
 
         //oxide::run().unwrap();
 
-        let engine = crate::engine::EngineBuilder::new().build().unwrap();
+        let engine = engine::EngineBuilder::new().build()?;
 
         let mesh_pentagon = Mesh::basic("pentagon", Primitive::Pentagon);
 
@@ -106,7 +102,7 @@ pub fn run_oxide() -> anyhow::Result<()>
         let mesh_triangle = Mesh::basic("triangle", Primitive::Triangle);
 
         {
-                let mut resources = engine.resources.lock().unwrap();
+                let mut resources = engine.resources.lock().unwrap_or_else(|e| e.into_inner());
 
                 resources.add_mesh(mesh_pentagon);
 
@@ -115,7 +111,7 @@ pub fn run_oxide() -> anyhow::Result<()>
                 resources.add_mesh(mesh_square);
         }
 
-        let runner = crate::engine::EngineRunner::new(engine)?;
+        let runner = engine::EngineRunner::new(engine)?;
 
         runner.run()?;
 
@@ -131,7 +127,7 @@ pub fn run_oxide() -> anyhow::Result<()>
 
 /// WebAssembly entry point for the engine runtime.
 ///
-/// This function is automatically called by the browser when
+/// The browser automatically calls this function when
 /// the WebAssembly module is initialized, thanks to the
 /// [`wasm_bindgen(start)`] attribute.
 ///
@@ -158,7 +154,7 @@ pub fn run_oxide_wasm() -> Result<(), JsValue>
 {
         console_error_panic_hook::set_once();
 
-        run_oxide();
+        let _ = run_oxide();
 
         Ok(())
 }

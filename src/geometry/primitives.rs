@@ -1,4 +1,4 @@
-use crate::geometry::{mesh::Mesh, vertex::Vertex};
+use crate::geometry:: vertex::Vertex;
 
 pub const PENT_V: &[Vertex] = &[
         Vertex {

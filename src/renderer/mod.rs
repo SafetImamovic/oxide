@@ -28,7 +28,7 @@ impl RenderContext {
 
     pub fn initialize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
         // Create camera
-        let mut camera = camera::Camera::new(width, height);
+        let camera = camera::Camera::new(width, height);
 
         // Create camera uniform
         let mut camera_uniform = camera::CameraUniform::new();

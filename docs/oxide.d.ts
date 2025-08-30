@@ -3,7 +3,7 @@
 /**
  * WebAssembly entry point for the engine runtime.
  *
- * This function is automatically called by the browser when
+ * The browser automatically calls this function when
  * the WebAssembly module is initialized, thanks to the
  * [`wasm_bindgen(start)`] attribute.
  *
@@ -40,9 +40,9 @@ export interface InitOutput {
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_6: WebAssembly.Table;
   readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h1906bbbc873e7667: (a: number, b: number) => void;
-  readonly closure835_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure837_externref_shim: (a: number, b: number, c: any, d: any) => void;
-  readonly closure1562_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure2889_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure2891_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure3063_externref_shim: (a: number, b: number, c: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

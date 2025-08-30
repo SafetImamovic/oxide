@@ -1,4 +1,4 @@
-use image::{DynamicImage, GenericImageView};
+use image::GenericImageView;
 
 pub struct Texture
 {
@@ -148,7 +148,7 @@ impl Texture
         pub fn new_diffuse_bind_group(
                 device: &wgpu::Device,
                 texture_bind_group_layout: &wgpu::BindGroupLayout,
-                diffuse_texture: &crate::texture::Texture,
+                diffuse_texture: &Texture,
         ) -> wgpu::BindGroup
         {
                 device.create_bind_group(&wgpu::BindGroupDescriptor {

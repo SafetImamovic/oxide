@@ -4,9 +4,8 @@ use std::{
 };
 
 use derivative::Derivative;
-use egui_wgpu::Renderer;
 
-use crate::{engine::FillMode, geometry::vertex::Vertex, resource::Resources};
+use crate::resource::Resources;
 use crate::renderer::pipeline::{PipelineKind, PipelineManager};
 
 #[derive(Derivative)]

@@ -20,14 +20,13 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
-use wgpu::Features;
+
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::geometry::mesh::Mesh;
 use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
@@ -61,10 +60,10 @@ impl EngineRunner
         /// # Returns
         ///
         /// `anyhow::Result<EngineRunner>`.
-        pub fn new(mut engine: Engine) -> anyhow::Result<Self>
+        pub fn new(#[allow(unused_mut)] mut engine: Engine) -> anyhow::Result<Self>
         {
                 let event_loop: EventLoop<EngineState> =
-                        winit::event_loop::EventLoop::with_user_event().build()?;
+                        EventLoop::with_user_event().build()?;
 
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -88,7 +87,8 @@ impl EngineRunner
         /// `anyhow::Result<()>`. because `run_app()` returns a Result.
         pub fn run(self) -> anyhow::Result<()>
         {
-                let mut engine = match self.engine
+                #[allow(unused_mut)]
+                let  mut engine = match self.engine
                 {
                         Some(e) => e,
                         None => anyhow::bail!("Engine doesn't exist."),
@@ -96,7 +96,7 @@ impl EngineRunner
 
                 #[cfg(target_arch = "wasm32")]
                 {
-                        let mut engine = Box::leak(Box::new(engine));
+                        let engine = Box::leak(Box::new(engine));
 
                         self.event_loop.spawn_app(engine);
                 }
@@ -121,7 +121,7 @@ pub enum FillMode
 /// To construct [`Engine`], use [`EngineBuilder`].
 ///
 /// [Engine] is responsible for the lifetime,
-/// event handling and destruction of itself.
+/// event handling, and destruction of itself.
 ///
 /// Every field is **Optional**.
 #[derive(Debug)]
@@ -140,7 +140,7 @@ pub struct Engine
 
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
-        pub window: Option<Arc<winit::window::Window>>,
+        pub window: Option<Arc<Window>>,
 
         /// `wgpu` internals.
         pub state: Option<EngineState>,
@@ -215,8 +215,6 @@ impl Engine
 
                 // ------------------ GUI ----------------------
 
-                let scale = self.window.as_ref().unwrap().scale_factor() as f32;
-
                 let pixels_per_point = self.ui_scale;
 
                 let screen_descriptor = egui_wgpu::ScreenDescriptor {
@@ -278,12 +276,6 @@ impl Engine
 
         fn resize(&mut self)
         {
-                let state = match &mut self.state
-                {
-                        Some(canvas) => canvas,
-                        None => return,
-                };
-
                 #[cfg(target_arch = "wasm32")]
                 {
                         let (width, height) = Self::get_body_size().unwrap();
@@ -411,7 +403,7 @@ impl EngineState
         /// # Panics
         /// Panics if surface creation, adapter selection, or device/queue
         /// creation fails.
-        pub async fn new(window: Arc<winit::window::Window>) -> anyhow::Result<EngineState>
+        pub async fn new(window: Arc<Window>) -> anyhow::Result<EngineState>
         {
                 let instance = EngineBuilder::instance();
 
@@ -529,65 +521,9 @@ impl EngineState
 
 impl ApplicationHandler<EngineState> for Engine
 {
-        /// Handles custom user events.
-        ///
-        /// On WASM, async initialization sends the completed [`State`] via a
-        /// proxy, which is received here and stored.
-        fn user_event(
-                &mut self,
-                _event_loop: &ActiveEventLoop,
-                event: EngineState,
-        )
-        {
-                #[cfg(target_arch = "wasm32")]
-                {
-                        self.window
-                                .clone()
-                                .expect("Window doesn't exist.")
-                                .request_redraw();
-
-                        self.state = Some(event);
-
-                        let state = self.state.as_mut().unwrap();
-
-                        let device: &wgpu::Device = &state.device;
-
-                        let depth_texture = crate::texture::Texture::create_depth_texture(
-                                &state.device,
-                                &state.surface_configuration,
-                                "depth_texture",
-                        );
-
-                        //let mut pipeline_manager = PipelineManager::new();
-
-                        let geom_pipeline = PipelineManager::create_geometry_pipeline(
-                                &device,
-                                &state.surface_configuration,
-                                &[],
-                                &depth_texture,
-                                &FillMode::Fill,
-                        );
-
-                        state.pipeline_manager
-                            .render_pipelines
-                            .insert(PipelineKind::Geometry, geom_pipeline);
-
-
-                        let geometry_pass = GeometryPass {
-                                name: "geometry_pass".to_string(),
-                                enabled: true,
-                                resources: self.resources.clone(),
-                        };
-
-                        state.render_graph.add_pass(Box::new(geometry_pass));
-
-                        self.resources.lock().unwrap().upload_all(&state.device);
-                }
-        }
-
         fn resumed(
                 &mut self,
-                event_loop: &winit::event_loop::ActiveEventLoop,
+                event_loop: &ActiveEventLoop,
         )
         {
                 // From the winit docs:
@@ -675,11 +611,60 @@ impl ApplicationHandler<EngineState> for Engine
                 {
                         let state = self.state.as_mut().unwrap();
 
+                        let geometry_pass = GeometryPass {
+                                name: "geometry_pass".to_string(),
+                                enabled: true,
+                                resources: self.resources.clone(),
+                        };
+
+                        state.render_graph.add_pass(Box::new(geometry_pass));
+
+                        self.resources.lock().unwrap().upload_all(&state.device);
+                }
+        }
+
+        /// Handles custom user events.
+        ///
+        /// On WASM, async initialization sends the completed [`State`] via a
+        /// proxy, which is received here and stored.
+        fn user_event(
+                &mut self,
+                _event_loop: &ActiveEventLoop,
+                _event: EngineState,
+        )
+        {
+                #[cfg(target_arch = "wasm32")]
+                {
+                        self.window
+                                .clone()
+                                .expect("Window doesn't exist.")
+                                .request_redraw();
+
+                        self.state = Some(_event);
+
+                        let state = self.state.as_mut().unwrap();
+
+                        let device: &wgpu::Device = &state.device;
+
                         let depth_texture = crate::texture::Texture::create_depth_texture(
                                 &state.device,
                                 &state.surface_configuration,
                                 "depth_texture",
                         );
+
+                        //let mut pipeline_manager = PipelineManager::new();
+
+                        let geom_pipeline = PipelineManager::create_geometry_pipeline(
+                                &device,
+                                &state.surface_configuration,
+                                &[],
+                                &depth_texture,
+                                &FillMode::Fill,
+                        );
+
+                        state.pipeline_manager
+                            .render_pipelines
+                            .insert(PipelineKind::Geometry, geom_pipeline);
 
 
                         let geometry_pass = GeometryPass {
@@ -717,7 +702,7 @@ impl ApplicationHandler<EngineState> for Engine
                                 println!("The close button was pressed; stopping");
                                 event_loop.exit();
                         }
-                        WindowEvent::Resized(size) =>
+                        WindowEvent::Resized(_size) =>
                         {
                                 self.resize();
                         }
@@ -864,11 +849,11 @@ impl EngineBuilder
 
         pub fn keybind<F>(
                 self,
-                key_code: winit::keyboard::KeyCode,
+                key_code: KeyCode,
                 f: F,
         ) -> Self
         where
-                F: FnOnce(winit::keyboard::KeyCode),
+                F: FnOnce(KeyCode),
         {
                 f(key_code);
                 self
@@ -964,7 +949,7 @@ impl EngineBuilder
 
         fn surface<'a>(
                 instance: &wgpu::Instance,
-                window: Arc<winit::window::Window>,
+                window: Arc<Window>,
         ) -> anyhow::Result<wgpu::Surface<'a>, wgpu::CreateSurfaceError>
         {
                 instance.create_surface(window)
@@ -972,7 +957,7 @@ impl EngineBuilder
 
         async fn adapter(
                 instance: &wgpu::Instance,
-                window: Arc<winit::window::Window>,
+                window: Arc<Window>,
         ) -> anyhow::Result<wgpu::Adapter>
         {
                 let surface = Self::surface(instance, window)?;
@@ -1044,13 +1029,6 @@ impl EngineBuilder
                         trace: wgpu::Trace::Off,
                 })
                 .await
-        }
-
-        fn combine_features(features: &Vec<wgpu::Features>) -> wgpu::Features
-        {
-                features.iter()
-                        .copied()
-                        .fold(wgpu::Features::empty(), |acc, f| acc | f)
         }
 
         fn texture_format(surface_caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat

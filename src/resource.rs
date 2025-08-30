@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::geometry::mesh::Mesh;
 
 #[derive(Debug, Default)]
