@@ -31,6 +31,7 @@ use crate::geometry::mesh::Mesh;
 use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
+use crate::renderer::pipeline::PipelineKind;
 use crate::ui::renderer::GuiRenderer;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use winit::window::Window;
@@ -209,7 +210,8 @@ impl Engine
                                         label: Some("Main Render Encoder"),
                                 });
 
-                state.render_graph.execute(&view, &mut encoder);
+                // Pass depth texture view to render graph
+                state.render_graph.execute(&view, &mut encoder, &state.pipeline_manager);
 
                 // ------------------ GUI ----------------------
 
@@ -247,21 +249,14 @@ impl Engine
                         if temp_fill_mode != self.fill_mode
                         {
                                 log::info!("Fill Mode: {:?}", self.fill_mode);
-                                // Request Pipeline Rebuild
 
-                                for pass in &mut state.render_graph.passes
-                                {
-                                        if let Some(geom) =
-                                                pass.as_any_mut().downcast_mut::<GeometryPass>()
-                                        {
-                                                geom.rebuild_pipeline(
-                                                        &state.device,
-                                                        &state.surface_configuration,
-                                                        self.fill_mode,
-                                                        &[],
-                                                );
-                                        }
-                                }
+                                // Request Pipeline Rebuild
+                                state.pipeline_manager.rebuild_geometry_pipeline(
+                                    &state.device, 
+                                    &state.surface_configuration,  
+                                    self.fill_mode, 
+                                    &[],
+                                );
                         }
 
                         state.gui.end_frame_and_draw(
@@ -394,11 +389,14 @@ pub struct EngineState
 
         pub surface_caps: wgpu::SurfaceCapabilities,
 
+
         pub vertex_buffers: Vec<wgpu::Buffer>,
 
         pub index_buffers: Vec<wgpu::Buffer>,
 
         pub render_graph: RenderGraph,
+
+        pub pipeline_manager: PipelineManager,
 }
 
 impl EngineState
@@ -437,16 +435,22 @@ impl EngineState
                 let depth_texture = crate::texture::Texture::create_depth_texture(
                         &device,
                         &surface_configuration,
-                        "depth_texture",
+                        "depth_texture"
                 );
 
-                let render_pipeline = PipelineManager::new(
+                let mut pipeline_manager = PipelineManager::new();
+
+                let geom_pipeline = PipelineManager::create_geometry_pipeline(
                         &device,
                         &surface_configuration,
                         &[],
                         &depth_texture,
-                        &FillMode::Wireframe,
+                        &FillMode::Fill,
                 );
+
+                pipeline_manager
+                        .render_pipelines
+                        .insert(PipelineKind::Geometry, geom_pipeline);
 
                 let bg_pass = BackgroundPass {
                         name: "bg_pass".to_string(),
@@ -457,7 +461,6 @@ impl EngineState
                                 b: 0.0,
                                 a: 1.0,
                         },
-                        pipeline: render_pipeline.render_pipeline.clone(),
                 };
 
                 let bg_pass_2 = BackgroundPass {
@@ -469,7 +472,6 @@ impl EngineState
                                 b: 0.0,
                                 a: 1.0,
                         },
-                        pipeline: render_pipeline.render_pipeline.clone(),
                 };
 
                 let bg_pass_3 = BackgroundPass {
@@ -481,7 +483,6 @@ impl EngineState
                                 b: 1.0,
                                 a: 1.0,
                         },
-                        pipeline: render_pipeline.render_pipeline.clone(),
                 };
 
                 let mut render_graph = RenderGraph {
@@ -497,6 +498,7 @@ impl EngineState
                 Ok(EngineState {
                         render_graph,
                         is_surface_configured: false,
+                        pipeline_manager,
                         gui,
                         surface,
                         adapter,
@@ -556,18 +558,24 @@ impl ApplicationHandler<EngineState> for Engine
                                 "depth_texture",
                         );
 
-                        let render_pipeline = PipelineManager::new(
-                                &state.device,
+                        //let mut pipeline_manager = PipelineManager::new();
+
+                        let geom_pipeline = PipelineManager::create_geometry_pipeline(
+                                &device,
                                 &state.surface_configuration,
                                 &[],
                                 &depth_texture,
-                                &self.fill_mode,
+                                &FillMode::Fill,
                         );
+
+                        state.pipeline_manager
+                            .render_pipelines
+                            .insert(PipelineKind::Geometry, geom_pipeline);
+
 
                         let geometry_pass = GeometryPass {
                                 name: "geometry_pass".to_string(),
                                 enabled: true,
-                                pipeline: render_pipeline.render_pipeline,
                                 resources: self.resources.clone(),
                         };
 
@@ -673,18 +681,10 @@ impl ApplicationHandler<EngineState> for Engine
                                 "depth_texture",
                         );
 
-                        let render_pipeline = PipelineManager::new(
-                                &state.device,
-                                &state.surface_configuration,
-                                &[],
-                                &depth_texture,
-                                &self.fill_mode,
-                        );
 
                         let geometry_pass = GeometryPass {
                                 name: "geometry_pass".to_string(),
                                 enabled: true,
-                                pipeline: render_pipeline.render_pipeline,
                                 resources: self.resources.clone(),
                         };
 

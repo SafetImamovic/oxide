@@ -1,14 +1,11 @@
-pub mod app;
 pub mod camera;
 pub mod config;
 pub mod engine;
 pub mod geometry;
-pub mod gui;
 pub mod input;
 pub mod renderer;
 pub mod resource;
 pub mod scene;
-pub mod state;
 pub mod texture;
 pub mod ui;
 pub mod utils;
@@ -41,7 +38,6 @@ use winit::platform::web::EventLoopExtWebSys;
 use wasm_bindgen::prelude::*;
 
 use crate::{
-        app::App,
         config::Config,
         geometry::{
                 mesh::{Mesh, Primitive},
@@ -50,114 +46,6 @@ use crate::{
         utils::exit::get_exit_message,
 };
 use winit::event_loop::EventLoop;
-
-/// WGSL doesn't have a Quaternion analog, so its passed in a matrix form.
-///
-/// Basically the GPU memory friendly form of an [`Instance`].
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct InstanceRaw
-{
-        pub model: [[f32; 4]; 4],
-}
-
-impl InstanceRaw
-{
-        pub fn desc() -> wgpu::VertexBufferLayout<'static>
-        {
-                use std::mem;
-                wgpu::VertexBufferLayout {
-                        array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
-                        step_mode: wgpu::VertexStepMode::Instance,
-                        attributes: &[
-                                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We
-                                // need to define a slot
-                                // for each vec4. We'll have to reassemble the mat4 in the shader.
-                                wgpu::VertexAttribute {
-                                        offset: 0,
-                                        shader_location: 5,
-                                        format: wgpu::VertexFormat::Float32x4,
-                                },
-                                wgpu::VertexAttribute {
-                                        offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                                        shader_location: 6,
-                                        format: wgpu::VertexFormat::Float32x4,
-                                },
-                                wgpu::VertexAttribute {
-                                        offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                                        shader_location: 7,
-                                        format: wgpu::VertexFormat::Float32x4,
-                                },
-                                wgpu::VertexAttribute {
-                                        offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
-                                        shader_location: 8,
-                                        format: wgpu::VertexFormat::Float32x4,
-                                },
-                        ],
-                }
-        }
-}
-
-/// Represents a singular instance of a Model.
-pub struct Instance
-{
-        pub position: cgmath::Vector3<f32>,
-        pub rotation: cgmath::Quaternion<f32>,
-}
-
-impl Instance
-{
-        /// Builds the matrix world transform from Vector3 postion and
-        /// Quaternion rotation.
-        ///
-        /// Applies Rotation first then Position (Matrix multiplication isn't
-        /// commutative).
-        pub fn to_raw(&self) -> InstanceRaw
-        {
-                InstanceRaw {
-                        model: (cgmath::Matrix4::from_translation(self.position)
-                                * cgmath::Matrix4::from(self.rotation))
-                        .into(),
-                }
-        }
-}
-
-/// Starts the application in native or WASM environments.
-pub fn run() -> anyhow::Result<()>
-{
-        crate::utils::bootstrap::config_logging();
-
-        let event_loop = EventLoop::with_user_event().build()?;
-
-        let mut config = crate::utils::bootstrap::create_config();
-
-        crate::utils::bootstrap::show_start_message();
-
-        #[allow(unused_mut)]
-        let mut app = App::new(
-                config,
-                #[cfg(target_arch = "wasm32")]
-                &event_loop,
-        );
-
-        #[cfg(target_arch = "wasm32")]
-        {
-                let mut app = Box::leak(Box::new(app));
-
-                event_loop.spawn_app(app);
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        event_loop.run_app(&mut app)?;
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-                let msg = get_exit_message();
-                log::info!("{msg}");
-        }
-
-        Ok(())
-}
 
 #[cfg(target_arch = "wasm32")]
 pub fn get_body_size() -> Option<(u32, u32)>
@@ -220,11 +108,11 @@ pub fn run_oxide() -> anyhow::Result<()>
         {
                 let mut resources = engine.resources.lock().unwrap();
 
-                resources.add_mesh("pentagon", mesh_pentagon);
+                resources.add_mesh(mesh_pentagon);
 
-                resources.add_mesh("triangle", mesh_triangle);
+                resources.add_mesh(mesh_triangle);
 
-                resources.add_mesh("square", mesh_square);
+                resources.add_mesh(mesh_square);
         }
 
         let runner = crate::engine::EngineRunner::new(engine)?;

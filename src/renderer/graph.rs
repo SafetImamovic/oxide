@@ -7,6 +7,7 @@ use derivative::Derivative;
 use egui_wgpu::Renderer;
 
 use crate::{engine::FillMode, geometry::vertex::Vertex, resource::Resources};
+use crate::renderer::pipeline::{PipelineKind, PipelineManager};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -30,13 +31,14 @@ impl RenderGraph
                 &mut self,
                 view: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
+                pipeline_manager: &PipelineManager,
         )
         {
                 for pass in self.passes.iter_mut()
                 {
                         if pass.enabled()
                         {
-                                pass.record(&view, encoder);
+                                pass.record(&view, encoder, &pipeline_manager);
                         }
                 }
         }
@@ -71,6 +73,7 @@ pub trait RenderPass
                 &mut self,
                 view: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
+                pipeline_manager: &PipelineManager,
         );
 }
 
@@ -80,7 +83,6 @@ pub struct BackgroundPass
         pub name: String,
         pub enabled: bool,
         pub clear_color: wgpu::Color,
-        pub pipeline: wgpu::RenderPipeline,
 }
 
 impl RenderPass for BackgroundPass
@@ -156,8 +158,10 @@ impl RenderPass for BackgroundPass
                 &mut self,
                 view: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
+                pipeline_manager: &PipelineManager,
         )
         {
+                // For a background pass, we typically don't need depth testing
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some(self.name()),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -168,12 +172,12 @@ impl RenderPass for BackgroundPass
                                         store: wgpu::StoreOp::Store,
                                 },
                         })],
-                        depth_stencil_attachment: None,
+                        depth_stencil_attachment: None, // Background doesn't need depth
                         occlusion_query_set: None,
                         timestamp_writes: None,
                 });
 
-                render_pass.set_pipeline(&self.pipeline);
+                render_pass.set_pipeline(pipeline_manager.get(PipelineKind::Geometry));
         }
 }
 
@@ -181,7 +185,6 @@ pub struct GeometryPass
 {
         pub name: String,
         pub enabled: bool,
-        pub pipeline: wgpu::RenderPipeline,
         pub resources: Arc<Mutex<Resources>>,
 }
 
@@ -211,9 +214,13 @@ impl RenderPass for GeometryPass
                         .default_open(true)
                         .show(ui, |ui| {
                                 // Info fields
-                                ui.label("LoadOp: Clear");
+                                ui.label("LoadOp: Load");
                                 ui.label("StoreOp: Store");
                                 ui.label("Depth/stencil attachment: None");
+
+                                if ui.button("Refresh Geometry").clicked() {
+                                    // This could trigger a refresh of geometry data
+                                }
                         });
         }
 
@@ -234,8 +241,11 @@ impl RenderPass for GeometryPass
                 &mut self,
                 view: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
+                pipeline_manager: &PipelineManager,
         )
         {
+
+
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some(&self.name),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -251,11 +261,11 @@ impl RenderPass for GeometryPass
                         timestamp_writes: None,
                 });
 
-                render_pass.set_pipeline(&self.pipeline);
+                render_pass.set_pipeline(pipeline_manager.get(PipelineKind::Geometry));
 
                 let resources = self.resources.lock().unwrap();
 
-                for mesh in resources.meshes.values()
+                for mesh in resources.meshes.iter()
                 {
                         render_pass.set_vertex_buffer(0, mesh.vertex_buffer().unwrap().slice(..));
 
@@ -269,80 +279,4 @@ impl RenderPass for GeometryPass
         }
 }
 
-impl GeometryPass
-{
-        pub fn rebuild_pipeline(
-                &mut self,
-                device: &wgpu::Device,
-                config: &wgpu::SurfaceConfiguration,
-                fill_mode: FillMode,
-                bind_groups: &[&wgpu::BindGroupLayout],
-        )
-        {
-                // Decide the polygon mode based on FillMode
-                let polygon_mode = match fill_mode
-                {
-                        FillMode::Fill => wgpu::PolygonMode::Fill,
-                        FillMode::Wireframe => wgpu::PolygonMode::Line,
-                        FillMode::Vertex => wgpu::PolygonMode::Point,
-                };
-
-                let shader = crate::renderer::pipeline::PipelineManager::load_shader_module(device);
-
-                let render_pipeline_layout =
-                        crate::renderer::pipeline::PipelineManager::get_render_pipeline_layout(
-                                device,
-                                bind_groups,
-                        );
-
-                let vertex_buffer = Vertex::get_desc();
-
-                // Recreate the pipeline
-                self.pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                        label: Some("Render Pipeline"),
-                        layout: Some(&render_pipeline_layout),
-                        vertex: wgpu::VertexState {
-                                module: &shader,
-                                entry_point: Some("vs_main"), // 1.
-                                buffers: &[vertex_buffer],    // 2.
-                                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        },
-                        fragment: Some(wgpu::FragmentState {
-                                // 3.
-                                module: &shader,
-                                entry_point: Some("fs_main"),
-                                targets: &[Some(wgpu::ColorTargetState {
-                                        // 4.
-                                        format: config.format,
-                                        blend: Some(wgpu::BlendState {
-                                                color: wgpu::BlendComponent::OVER,
-                                                alpha: wgpu::BlendComponent::OVER,
-                                        }),
-                                        write_mask: wgpu::ColorWrites::ALL,
-                                })],
-                                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        }),
-                        primitive: wgpu::PrimitiveState {
-                                topology: wgpu::PrimitiveTopology::TriangleList, // 1.
-                                strip_index_format: None,
-                                front_face: wgpu::FrontFace::Ccw, // 2.
-                                cull_mode: Some(wgpu::Face::Back),
-                                // Setting this to anything other than Fill requires
-                                // Features::NON_FILL_POLYGON_MODE
-                                polygon_mode,
-                                // Requires Features::DEPTH_CLIP_CONTROL
-                                // Requires Features::CONSERVATIVE_RASTERIZATION
-                                conservative: false,
-                                unclipped_depth: false,
-                        },
-                        depth_stencil: None, // 1.
-                        multisample: wgpu::MultisampleState {
-                                count: 1,                         // 2.
-                                mask: !0,                         // 3.
-                                alpha_to_coverage_enabled: false, // 4.
-                        },
-                        multiview: None, // 5.
-                        cache: None,     // 6.
-                });
-        }
-}
+impl GeometryPass {}

@@ -5,7 +5,7 @@ use crate::geometry::mesh::Mesh;
 #[derive(Debug, Default)]
 pub struct Resources
 {
-        pub meshes: HashMap<String, Mesh>,
+        pub meshes: Vec<Mesh>,
 }
 
 impl Resources
@@ -13,17 +13,16 @@ impl Resources
         pub fn new() -> Self
         {
                 Self {
-                        meshes: HashMap::new(),
+                        meshes: Vec::new(),
                 }
         }
 
         pub fn add_mesh(
                 &mut self,
-                name: &str,
                 mesh: Mesh,
         )
         {
-                self.meshes.insert(name.to_string(), mesh);
+                self.meshes.push(mesh);
         }
 
         pub fn upload_all(
@@ -31,7 +30,7 @@ impl Resources
                 device: &wgpu::Device,
         )
         {
-                for mesh in self.meshes.values_mut()
+                for mesh in self.meshes.iter_mut()
                 {
                         if mesh.needs_upload()
                         {
