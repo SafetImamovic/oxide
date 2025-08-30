@@ -43,10 +43,84 @@ use wasm_bindgen::prelude::*;
 use crate::{
         app::App,
         config::Config,
-        geometry::{mesh::Mesh, vertex::Vertex},
+        geometry::{
+                mesh::{Mesh, Primitive},
+                vertex::Vertex,
+        },
         utils::exit::get_exit_message,
 };
 use winit::event_loop::EventLoop;
+
+/// WGSL doesn't have a Quaternion analog, so its passed in a matrix form.
+///
+/// Basically the GPU memory friendly form of an [`Instance`].
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct InstanceRaw
+{
+        pub model: [[f32; 4]; 4],
+}
+
+impl InstanceRaw
+{
+        pub fn desc() -> wgpu::VertexBufferLayout<'static>
+        {
+                use std::mem;
+                wgpu::VertexBufferLayout {
+                        array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &[
+                                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We
+                                // need to define a slot
+                                // for each vec4. We'll have to reassemble the mat4 in the shader.
+                                wgpu::VertexAttribute {
+                                        offset: 0,
+                                        shader_location: 5,
+                                        format: wgpu::VertexFormat::Float32x4,
+                                },
+                                wgpu::VertexAttribute {
+                                        offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                                        shader_location: 6,
+                                        format: wgpu::VertexFormat::Float32x4,
+                                },
+                                wgpu::VertexAttribute {
+                                        offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
+                                        shader_location: 7,
+                                        format: wgpu::VertexFormat::Float32x4,
+                                },
+                                wgpu::VertexAttribute {
+                                        offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
+                                        shader_location: 8,
+                                        format: wgpu::VertexFormat::Float32x4,
+                                },
+                        ],
+                }
+        }
+}
+
+/// Represents a singular instance of a Model.
+pub struct Instance
+{
+        pub position: cgmath::Vector3<f32>,
+        pub rotation: cgmath::Quaternion<f32>,
+}
+
+impl Instance
+{
+        /// Builds the matrix world transform from Vector3 postion and
+        /// Quaternion rotation.
+        ///
+        /// Applies Rotation first then Position (Matrix multiplication isn't
+        /// commutative).
+        pub fn to_raw(&self) -> InstanceRaw
+        {
+                InstanceRaw {
+                        model: (cgmath::Matrix4::from_translation(self.position)
+                                * cgmath::Matrix4::from(self.rotation))
+                        .into(),
+                }
+        }
+}
 
 /// Starts the application in native or WASM environments.
 pub fn run() -> anyhow::Result<()>
@@ -103,118 +177,6 @@ pub fn get_body_size() -> Option<(u32, u32)>
         Some((width, height))
 }
 
-/// Represents a singular instance of a Model.
-pub struct Instance
-{
-        pub position: cgmath::Vector3<f32>,
-        pub rotation: cgmath::Quaternion<f32>,
-}
-
-impl Instance
-{
-        /// Builds the matrix world transform from Vector3 postion and
-        /// Quaternion rotation.
-        ///
-        /// Applies Rotation first then Position (Matrix multiplication isn't
-        /// commutative).
-        pub fn to_raw(&self) -> InstanceRaw
-        {
-                InstanceRaw {
-                        model: (cgmath::Matrix4::from_translation(self.position)
-                                * cgmath::Matrix4::from(self.rotation))
-                        .into(),
-                }
-        }
-}
-
-/// WGSL doesn't have a Quaternion analog, so its passed in a matrix form.
-///
-/// Basically the GPU memory friendly form of an [`Instance`].
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct InstanceRaw
-{
-        pub model: [[f32; 4]; 4],
-}
-
-impl InstanceRaw
-{
-        pub fn desc() -> wgpu::VertexBufferLayout<'static>
-        {
-                use std::mem;
-                wgpu::VertexBufferLayout {
-                        array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
-                        step_mode: wgpu::VertexStepMode::Instance,
-                        attributes: &[
-                                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We
-                                // need to define a slot
-                                // for each vec4. We'll have to reassemble the mat4 in the shader.
-                                wgpu::VertexAttribute {
-                                        offset: 0,
-                                        shader_location: 5,
-                                        format: wgpu::VertexFormat::Float32x4,
-                                },
-                                wgpu::VertexAttribute {
-                                        offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                                        shader_location: 6,
-                                        format: wgpu::VertexFormat::Float32x4,
-                                },
-                                wgpu::VertexAttribute {
-                                        offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                                        shader_location: 7,
-                                        format: wgpu::VertexFormat::Float32x4,
-                                },
-                                wgpu::VertexAttribute {
-                                        offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
-                                        shader_location: 8,
-                                        format: wgpu::VertexFormat::Float32x4,
-                                },
-                        ],
-                }
-        }
-}
-
-pub const PENTAGON: &[Vertex] = &[
-        Vertex {
-                position: [-0.0868241, 0.49240386, 0.0],
-                tex_coords: [0.4131759, 0.00759614],
-        }, // A
-        Vertex {
-                position: [-0.49513406, 0.06958647, 0.0],
-                tex_coords: [0.0048659444, 0.43041354],
-        }, // B
-        Vertex {
-                position: [-0.21918549, -0.44939706, 0.0],
-                tex_coords: [0.28081453, 0.949397],
-        }, // C
-        Vertex {
-                position: [0.35966998, -0.3473291, 0.0],
-                tex_coords: [0.85967, 0.84732914],
-        }, // D
-        Vertex {
-                position: [0.44147372, 0.2347359, 0.0],
-                tex_coords: [0.9414737, 0.2652641],
-        }, // E
-];
-
-pub const TRI: &[Vertex] = &[
-        Vertex {
-                position: [-0.0, 0.5, 0.0],
-                tex_coords: [0.0, 0.0],
-        }, // A
-        Vertex {
-                position: [-0.5, -0.5, 0.0],
-                tex_coords: [0.0, 0.0],
-        }, // B
-        Vertex {
-                position: [0.5, -0.5, 0.0],
-                tex_coords: [0.0, 0.0],
-        }, // C
-];
-
-pub const P_INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
-pub const P_TRI: &[u16] = &[0, 1, 2];
-
 pub fn run_oxide() -> anyhow::Result<()>
 {
         crate::utils::bootstrap::config_logging();
@@ -247,21 +209,23 @@ pub fn run_oxide() -> anyhow::Result<()>
 
         //oxide::run().unwrap();
 
-        let mut engine = crate::engine::EngineBuilder::new().build().unwrap();
+        let engine = crate::engine::EngineBuilder::new().build().unwrap();
 
-        let mesh_pentagon = Mesh::new("pentagon", PENTAGON.to_vec(), P_INDICES.to_vec());
+        let mesh_pentagon = Mesh::basic("pentagon", Primitive::Pentagon);
 
-        let mesh_triangle = Mesh::new("triangle", TRI.to_vec(), P_TRI.to_vec());
+        let mesh_square = Mesh::basic("square", Primitive::Square);
 
-        engine.resources
-                .lock()
-                .unwrap()
-                .add_mesh("pentagon", mesh_pentagon);
+        let mesh_triangle = Mesh::basic("triangle", Primitive::Triangle);
 
-        engine.resources
-                .lock()
-                .unwrap()
-                .add_mesh("triangle", mesh_triangle);
+        {
+                let mut resources = engine.resources.lock().unwrap();
+
+                resources.add_mesh("pentagon", mesh_pentagon);
+
+                resources.add_mesh("triangle", mesh_triangle);
+
+                resources.add_mesh("square", mesh_square);
+        }
 
         let runner = crate::engine::EngineRunner::new(engine)?;
 

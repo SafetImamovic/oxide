@@ -1,6 +1,13 @@
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
-use crate::geometry::vertex::Vertex;
+use crate::geometry::{primitives::*, vertex::Vertex};
+
+pub enum Primitive
+{
+        Triangle,
+        Square,
+        Pentagon,
+}
 
 #[derive(Debug)]
 pub struct Mesh
@@ -22,8 +29,6 @@ pub struct Mesh
 
 impl Mesh
 {
-        //---------------------- Public ------------------------
-
         pub fn new(
                 name: impl Into<String>,
                 vertices: Vec<Vertex>,
@@ -43,6 +48,19 @@ impl Mesh
                         index_count,
                         index_format: wgpu::IndexFormat::Uint16,
                         needs_upload: true,
+                }
+        }
+
+        pub fn basic(
+                name: impl Into<String>,
+                primitive: Primitive,
+        ) -> Self
+        {
+                match primitive
+                {
+                        Primitive::Triangle => Self::new(name, TRI_V.to_vec(), TRI_I.to_vec()),
+                        Primitive::Square => Self::new(name, SQ_V.to_vec(), SQ_I.to_vec()),
+                        Primitive::Pentagon => Self::new(name, PENT_V.to_vec(), PENT_I.to_vec()),
                 }
         }
 
