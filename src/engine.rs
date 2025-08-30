@@ -35,11 +35,11 @@ use crate::ui::renderer::GuiRenderer;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use winit::window::Window;
 use winit::{
-        application::ApplicationHandler,
-        event::{KeyEvent, WindowEvent},
-        event_loop::{ActiveEventLoop, EventLoop},
-        keyboard::{KeyCode, PhysicalKey},
-        window::WindowId,
+    application::ApplicationHandler,
+    event::{KeyEvent, WindowEvent},
+    event_loop::{ActiveEventLoop, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
+    window::WindowId,
 };
 
 /// Runner for the [`Engine`].

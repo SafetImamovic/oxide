@@ -1,12 +1,12 @@
 use std::{
-        any::Any,
-        sync::{Arc, Mutex},
+    any::Any,
+    sync::{Arc, Mutex},
 };
 
 use derivative::Derivative;
 
-use crate::resource::Resources;
 use crate::renderer::pipeline::{PipelineKind, PipelineManager};
+use crate::resource::Resources;
 
 #[derive(Derivative)]
 #[derivative(Debug)]

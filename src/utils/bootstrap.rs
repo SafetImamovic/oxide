@@ -38,11 +38,3 @@ pub fn config_logging()
                 log::info!("Running on wasm32.");
         }
 }
-
-pub fn create_config() -> crate::Config
-{
-        crate::Config::from_file().unwrap_or_else(|err| {
-                log::warn!("Failed to load config: {err}, falling back to default");
-                crate::Config::default()
-        })
-}

@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Deg, Point3, Vector3, perspective, InnerSpace, SquareMatrix};
+use cgmath::{perspective, Deg, InnerSpace, Matrix4, Point3, SquareMatrix, Vector3};
 
 #[derive(Debug)]
 pub struct Camera {

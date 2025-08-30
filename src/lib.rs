@@ -60,19 +60,6 @@
 //! 3. Prepare GPU resources and record rendering commands.
 //! 4. Submit work to the GPU and present the frame.
 //!
-//! # Modules at a glance
-//!
-//! - [`config`]: Runtime configuration.
-//! - [`engine`]: Core engine types, builders, and the main loop runner.
-//! - [`renderer`]: Rendering pipeline and frame submission.
-//! - [`resource`]: Shared asset management (meshes, textures, etc.).
-//! - [`geometry`]: Primitive generation and geometry helpers.
-//! - [`texture`]: Texture loading and GPU binding helpers.
-//! - [`scene`]: Scene graph, entities, and update logic.
-//! - [`input`]: Keyboard/mouse/window input handling.
-//! - [`ui`]: Immediate‑mode UI integration and debug panels.
-//! - [`utils`]: Bootstrap, logging, and small utilities.
-//!
 //! # Logging, errors, and diagnostics
 //!
 //! - Logging is initialized at startup. Use your environment or dev tools to adjust verbosity.
@@ -118,8 +105,6 @@
 //! Feedback is welcome as this thesis project evolves.
 //!
 
-
-pub mod config;
 pub mod engine;
 pub mod geometry;
 pub mod input;
@@ -134,12 +119,7 @@ pub mod utils;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::{
-        config::Config,
-        geometry::{
-                mesh::{Mesh, Primitive},
-        },
-};
+use crate::geometry::mesh::{Mesh, Primitive};
 
 /// Starts the Oxide runtime and blocks until the application exits.
 ///
@@ -200,14 +180,12 @@ pub fn run() -> anyhow::Result<()>
 
         let mesh_triangle = Mesh::basic("triangle", Primitive::Triangle);
 
+        let hexagon = Mesh::generate_n_gon(16, 0.5);
+
         {
                 let mut resources = engine.resources.lock().unwrap_or_else(|e| e.into_inner());
 
-                resources.add_mesh(mesh_pentagon);
-
-                resources.add_mesh(mesh_triangle);
-
-                resources.add_mesh(mesh_square);
+                resources.add_mesh(hexagon);
         }
 
         let runner = engine::EngineRunner::new(engine)?;

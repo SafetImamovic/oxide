@@ -121,4 +121,77 @@ impl Mesh
 
                 self.needs_upload = false;
         }
+
+        /// Convenience: builds a regular n-gon at the origin in the XY plane with the given radius.
+        /// This version constructs `Vertex` values in a minimal, generic way. Adjust if your
+        /// `Vertex` has a different layout.
+        pub fn generate_n_gon(sides: u32, radius: f32) -> Self {
+                // Adjust this closure to match your Vertex layout if needed.
+                Self::generate_n_gon_with_radius(sides, radius, |pos, _i| Vertex {
+                        // If your Vertex doesn't have these fields or Default, adapt accordingly.
+                        position: pos,
+                        ..Default::default()
+                })
+        }
+
+        /// Back-compat wrapper: same as before, assumes radius = 1.0.
+        /// Use `generate_n_gon_with_radius` if you need a custom radius.
+        pub fn generate_n_gon_with<F>(sides: u32, mut make_vertex: F) -> Self
+        where
+            F: FnMut([f32; 3], usize) -> Vertex,
+        {
+                Self::generate_n_gon_with_radius(sides, 1.0, move |pos, i| make_vertex(pos, i))
+        }
+
+        /// Flexible generator that lets you decide how to build each `Vertex`, with a custom radius.
+        /// - sides >= 3
+        /// - Center at origin, XY plane, Z = 0
+        /// - CCW winding (positive radius). Negative radius flips winding.
+        pub fn generate_n_gon_with_radius<F>(sides: u32, radius: f32, mut make_vertex: F) -> Self
+        where
+            F: FnMut([f32; 3], usize) -> Vertex,
+        {
+                assert!(sides >= 3, "n-gon must have at least 3 sides");
+                assert!(
+                        (sides as usize) + 1 <= (u16::MAX as usize),
+                        "too many sides for u16 index buffer"
+                );
+                assert!(radius.is_finite(), "radius must be a finite number");
+
+                let n = sides as usize;
+
+                // Center + ring
+                let mut vertices = Vec::with_capacity(n + 1);
+                vertices.push(make_vertex([0.0, 0.0, 0.0], 0));
+
+                let angle_step = 2.0_f32 * std::f32::consts::PI / (sides as f32);
+                for i in 0..n {
+                        let angle = (i as f32) * angle_step;
+                        let x = radius * angle.cos();
+                        let y = radius * angle.sin();
+                        vertices.push(make_vertex([x, y, 0.0], i + 1));
+                }
+
+                // Triangle fan from center (index 0)
+                let mut indices = Vec::<u16>::with_capacity(n * 3);
+                for i in 0..n {
+                        let b = (i + 1) as u16;
+                        let c = ((i + 1) % n + 1) as u16;
+                        indices.extend_from_slice(&[0, b, c]);
+                }
+
+                Mesh {
+                        name: format!("n-gon-{}-r{}", sides, radius),
+                        vertices,
+                        indices,
+                        vertex_buffer: None,
+                        index_buffer: None,
+                        index_count: (n as u32) * 3,
+                        vertex_count: (n as u32) + 1,
+                        index_format: wgpu::IndexFormat::Uint16,
+                        needs_upload: true,
+                }
+        }
+
+
 }

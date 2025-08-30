@@ -4,6 +4,7 @@
 /// so it can be safely shared with GPU graphics APIs.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Default)]
 pub struct Vertex
 {
         pub position: [f32; 3],
