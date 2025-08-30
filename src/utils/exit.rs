@@ -2,7 +2,14 @@ use colored::*;
 
 use crate::utils::random::get_random_u128;
 
-pub fn get_exit_message() -> String
+#[cfg(target_arch = "wasm32")]
+pub fn show_exit_message()
+{
+
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn show_exit_message()
 {
         let messages = [
                 ("Oxide has been reduced to its elemental components.", "red"),
@@ -34,5 +41,7 @@ pub fn get_exit_message() -> String
                 "bright red" => message.bright_red().to_string(),
                 "bright yellow" => message.bright_yellow().to_string(),
                 _ => message.to_string(),
-        }
+        };
+
+        log::info!("{}", message);
 }
