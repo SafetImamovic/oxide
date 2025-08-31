@@ -1,6 +1,6 @@
 //! Oxide Engine Module
 //!
-//! This module provides the core engine functionality for Oxide, including:
+//! This module provides the core engine functionality for Oxide, including
 //! - Engine construction via [`EngineBuilder`]
 //! - Engine lifecycle management through [`EngineRunner`]
 //! - User-defined setup via the [`EngineHandler`] trait
@@ -20,7 +20,7 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
-
+use wgpu::PresentMode;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
 
@@ -134,9 +134,8 @@ pub struct Engine
 
         pub ui_scale: f32,
 
+        /// Polygon fill mode, depends on the platforms wgpu features.
         pub fill_mode: FillMode,
-
-        pub features: Vec<wgpu::Features>,
 
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
@@ -147,15 +146,7 @@ pub struct Engine
 
         // --- Timing ---
         /// The timestamp of the last frame, used for delta time calculations.
-        pub time: Option<std::time::Instant>,
-
-        // --- Rendering ---
-        /// Context for rendering, may contain pipelines, passes, and resources.
-        pub render_ctx: Option<crate::renderer::RenderContext>,
-
-        // --- Scene / Resources ---
-        /// The active scene graph or world being rendered and updated.
-        pub scene: Option<crate::scene::Scene>,
+        pub time: Option<instant::Instant>,
 
         pub resources: Arc<Mutex<Resources>>,
 
@@ -172,18 +163,39 @@ pub struct Engine
 
 impl Engine
 {
-        pub fn render(&mut self) -> anyhow::Result<(), wgpu::SurfaceError>
+        pub fn render(&mut self) -> anyhow::Result<()>
         {
-                let state = self.state.as_mut().unwrap();
+                let state =  match  self.state.as_mut() {
+                        None =>{ anyhow::bail!("EngineState doesn't exist."); },
+                        Some(s) => s
+                };
 
-                self.window.clone().unwrap().request_redraw();
+                let window = match self.window.as_ref() {
+                        None => {anyhow::bail!("Window doesn't exist.");},
+                        Some(w) => {w.clone()}
+                };
 
+                // The _resize() method is called and sets this flag to true
                 if !state.is_surface_configured
                 {
                         return Ok(());
                 }
 
                 // Get the surface texture ONCE per frame
+                //
+                // Returns the next texture to be presented by the swapchain for drawing.
+                //
+                // In order to present the SurfaceTexture returned by this method,
+                // first a Queue::submit needs to be done with some work rendering to this texture.
+                // Then SurfaceTexture::present needs to be called.
+                //
+                // ```rust
+                //         state.queue.submit(std::iter::once(encoder.finish())); // oxide::EngineState
+                //         output.present(); // wgpu::SurfaceTexture
+                // ```
+                //
+                // If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
+                // recreating the swapchain will panic
                 let output = match state.surface.get_current_texture()
                 {
                         Ok(frame) => frame,
@@ -191,12 +203,12 @@ impl Engine
                         {
                                 // This often happens during window resizing
                                 println!("wgpu surface outdated");
-                                return Err(wgpu::SurfaceError::Outdated);
+                                return Err(wgpu::SurfaceError::Outdated).map_err(Into::into);
                         }
                         Err(e) =>
                         {
                                 eprintln!("Failed to acquire surface texture: {:?}", e);
-                                return Err(e);
+                                return Err(e).map_err(Into::into);
                         }
                 };
 
@@ -228,12 +240,14 @@ impl Engine
 
                 {
                         let supported = state.adapter.features();
+
                         let desired = wgpu::Features::POLYGON_MODE_LINE
-                                | wgpu::Features::POLYGON_MODE_POINT;
+                                | wgpu::Features::POLYGON_MODE_POINT | wgpu::Features::TIMESTAMP_QUERY;
+
                         let enabled_features = supported & desired;
 
                         state.gui
-                                .begin_frame(self.window.as_ref().unwrap(), &mut self.ui_scale);
+                                .begin_frame(&window.clone(), &mut self.ui_scale);
 
                         let temp_fill_mode = self.fill_mode;
 
@@ -250,9 +264,9 @@ impl Engine
 
                                 // Request Pipeline Rebuild
                                 state.pipeline_manager.rebuild_geometry_pipeline(
-                                    &state.device, 
-                                    &state.surface_configuration,  
-                                    self.fill_mode, 
+                                    &state.device,
+                                    &state.surface_configuration,
+                                    self.fill_mode,
                                     &[],
                                 );
                         }
@@ -261,7 +275,7 @@ impl Engine
                                 &state.device,
                                 &state.queue,
                                 &mut encoder,
-                                self.window.as_ref().unwrap(),
+                                &window.clone(),
                                 &view,
                                 screen_descriptor,
                         );
@@ -708,31 +722,29 @@ impl ApplicationHandler<EngineState> for Engine
                         }
                         WindowEvent::RedrawRequested =>
                         {
-                                #[cfg(not(target_arch = "wasm32"))]
-                                let start = std::time::Instant::now();
+                                let start = instant::Instant::now();
 
                                 match self.render()
                                 {
                                         Ok(_) =>
                                         {
-                                                #[cfg(not(target_arch = "wasm32"))]
-                                                {
-                                                        let duration = start.elapsed();
+                                                let window: Arc<Window> = match self.window.as_ref() {
+                                                        None => return,
+                                                        Some(w) => {w.clone()}
+                                                };
 
-                                                        let fps = 1.0 / duration.as_secs_f32();
+                                                window.request_redraw();
 
-                                                        log::info!(
-                                                                "Render frame took: {:.2} ms, FPS: {:.1}",
-                                                                duration.as_secs_f64() * 1000.0,
-                                                                fps
-                                                        );
-                                                }
+                                                let duration = start.elapsed();
+
+                                                let fps = 1.0 / duration.as_secs_f32();
+
+                                                log::info!(
+                                                        "Render frame took: {:.2} ms, FPS: {:.1}",
+                                                        duration.as_secs_f64() * 1000.0,
+                                                        fps
+                                                );
                                         }
-                                        Err(
-                                                wgpu::SurfaceError::Lost
-                                                | wgpu::SurfaceError::Outdated,
-                                        ) =>
-                                        {}
                                         Err(e) =>
                                         {
                                                 log::error!("Unable to render {}", e);
@@ -833,12 +845,9 @@ impl EngineBuilder
                                 proxy: None,
                                 resources,
                                 fill_mode: FillMode::Fill,
-                                features: vec![],
                                 ui_scale: 1.5,
                                 state: None,
                                 time: None,
-                                render_ctx: None,
-                                scene: None,
                                 camera: None,
                                 input: None,
                                 ui: None,
@@ -862,30 +871,10 @@ impl EngineBuilder
         /// Set the time (for delta timing)
         pub fn with_time(
                 mut self,
-                time: std::time::Instant,
+                time: instant::Instant,
         ) -> Self
         {
                 self.engine.time = Some(time);
-                self
-        }
-
-        /// Set the renderer context
-        pub fn with_render_ctx(
-                mut self,
-                render_ctx: crate::renderer::RenderContext,
-        ) -> Self
-        {
-                self.engine.render_ctx = Some(render_ctx);
-                self
-        }
-
-        /// Set the scene
-        pub fn with_scene(
-                mut self,
-                scene: crate::scene::Scene,
-        ) -> Self
-        {
-                self.engine.scene = Some(scene);
                 self
         }
 
@@ -1000,7 +989,7 @@ impl EngineBuilder
                 }
 
                 let desired =
-                        wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::POLYGON_MODE_POINT;
+                        wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::POLYGON_MODE_POINT | wgpu::Features::TIMESTAMP_QUERY;
 
                 let required_features = supported & desired;
 
@@ -1065,7 +1054,7 @@ impl EngineBuilder
                         // environments, because wasm only has 1
                         // present mode.
                         #[cfg(not(target_arch = "wasm32"))]
-                        present_mode: surface_caps.present_modes[1],
+                        present_mode: PresentMode::Immediate,
 
                         alpha_mode: surface_caps.alpha_modes[0],
 
