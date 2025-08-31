@@ -1,4 +1,6 @@
-fn main()
+fn main() -> anyhow::Result<()>
 {
-        oxide::run().unwrap();
+        oxide::run()?;
+
+        Ok(())
 }

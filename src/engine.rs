@@ -35,11 +35,11 @@ use crate::ui::renderer::GuiRenderer;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use winit::window::Window;
 use winit::{
-    application::ApplicationHandler,
-    event::{KeyEvent, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoop},
-    keyboard::{KeyCode, PhysicalKey},
-    window::WindowId,
+        application::ApplicationHandler,
+        event::{KeyEvent, WindowEvent},
+        event_loop::{ActiveEventLoop, EventLoop},
+        keyboard::{KeyCode, PhysicalKey},
+        window::WindowId,
 };
 
 /// Runner for the [`Engine`].
@@ -62,8 +62,7 @@ impl EngineRunner
         /// `anyhow::Result<EngineRunner>`.
         pub fn new(#[allow(unused_mut)] mut engine: Engine) -> anyhow::Result<Self>
         {
-                let event_loop: EventLoop<EngineState> =
-                        EventLoop::with_user_event().build()?;
+                let event_loop: EventLoop<EngineState> = EventLoop::with_user_event().build()?;
 
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -88,7 +87,7 @@ impl EngineRunner
         pub fn run(self) -> anyhow::Result<()>
         {
                 #[allow(unused_mut)]
-                let  mut engine = match self.engine
+                let mut engine = match self.engine
                 {
                         Some(e) => e,
                         None => anyhow::bail!("Engine doesn't exist."),
@@ -165,14 +164,22 @@ impl Engine
 {
         pub fn render(&mut self) -> anyhow::Result<()>
         {
-                let state =  match  self.state.as_mut() {
-                        None =>{ anyhow::bail!("EngineState doesn't exist."); },
-                        Some(s) => s
+                let state = match self.state.as_mut()
+                {
+                        None =>
+                        {
+                                anyhow::bail!("EngineState doesn't exist.");
+                        }
+                        Some(s) => s,
                 };
 
-                let window = match self.window.as_ref() {
-                        None => {anyhow::bail!("Window doesn't exist.");},
-                        Some(w) => {w.clone()}
+                let window = match self.window.as_ref()
+                {
+                        None =>
+                        {
+                                anyhow::bail!("Window doesn't exist.");
+                        }
+                        Some(w) => w.clone(),
                 };
 
                 // The _resize() method is called and sets this flag to true
@@ -186,16 +193,16 @@ impl Engine
                 // Returns the next texture to be presented by the swapchain for drawing.
                 //
                 // In order to present the SurfaceTexture returned by this method,
-                // first a Queue::submit needs to be done with some work rendering to this texture.
-                // Then SurfaceTexture::present needs to be called.
+                // first a Queue::submit needs to be done with some work rendering to this
+                // texture. Then SurfaceTexture::present needs to be called.
                 //
                 // ```rust
                 //         state.queue.submit(std::iter::once(encoder.finish())); // oxide::EngineState
                 //         output.present(); // wgpu::SurfaceTexture
                 // ```
                 //
-                // If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
-                // recreating the swapchain will panic
+                // If a SurfaceTexture referencing this surface is alive when the swapchain is
+                // recreated, recreating the swapchain will panic
                 let output = match state.surface.get_current_texture()
                 {
                         Ok(frame) => frame,
@@ -223,7 +230,8 @@ impl Engine
                                 });
 
                 // Pass depth texture view to render graph
-                state.render_graph.execute(&view, &mut encoder, &state.pipeline_manager);
+                state.render_graph
+                        .execute(&view, &mut encoder, &state.pipeline_manager);
 
                 // ------------------ GUI ----------------------
 
@@ -242,12 +250,12 @@ impl Engine
                         let supported = state.adapter.features();
 
                         let desired = wgpu::Features::POLYGON_MODE_LINE
-                                | wgpu::Features::POLYGON_MODE_POINT | wgpu::Features::TIMESTAMP_QUERY;
+                                | wgpu::Features::POLYGON_MODE_POINT
+                                | wgpu::Features::TIMESTAMP_QUERY;
 
                         let enabled_features = supported & desired;
 
-                        state.gui
-                                .begin_frame(&window.clone(), &mut self.ui_scale);
+                        state.gui.begin_frame(&window.clone(), &mut self.ui_scale);
 
                         let temp_fill_mode = self.fill_mode;
 
@@ -264,10 +272,10 @@ impl Engine
 
                                 // Request Pipeline Rebuild
                                 state.pipeline_manager.rebuild_geometry_pipeline(
-                                    &state.device,
-                                    &state.surface_configuration,
-                                    self.fill_mode,
-                                    &[],
+                                        &state.device,
+                                        &state.surface_configuration,
+                                        self.fill_mode,
+                                        &[],
                                 );
                         }
 
@@ -395,7 +403,6 @@ pub struct EngineState
 
         pub surface_caps: wgpu::SurfaceCapabilities,
 
-
         pub vertex_buffers: Vec<wgpu::Buffer>,
 
         pub index_buffers: Vec<wgpu::Buffer>,
@@ -421,6 +428,8 @@ impl EngineState
         {
                 let instance = EngineBuilder::instance();
 
+                Self::log_all_adapters(&instance);
+
                 let size = window.inner_size();
 
                 let surface = instance.create_surface(window.clone())?;
@@ -441,7 +450,7 @@ impl EngineState
                 let depth_texture = crate::texture::Texture::create_depth_texture(
                         &device,
                         &surface_configuration,
-                        "depth_texture"
+                        "depth_texture",
                 );
 
                 let mut pipeline_manager = PipelineManager::new();
@@ -530,6 +539,20 @@ impl EngineState
         pub fn get_adapter_features(&self) -> wgpu::Features
         {
                 self.adapter.features()
+        }
+
+        pub fn get_all_adapters(instance: &wgpu::Instance) -> Vec<wgpu::Adapter>
+        {
+                instance.enumerate_adapters(wgpu::Backends::all())
+        }
+
+        pub fn log_all_adapters(instance: &wgpu::Instance)
+        {
+                log::info!("All Available Adapters:");
+
+                Self::get_all_adapters(instance)
+                        .iter()
+                        .for_each(|a| log::info!("\t{:#?}", a.get_info()));
         }
 }
 
@@ -677,9 +700,8 @@ impl ApplicationHandler<EngineState> for Engine
                         );
 
                         state.pipeline_manager
-                            .render_pipelines
-                            .insert(PipelineKind::Geometry, geom_pipeline);
-
+                                .render_pipelines
+                                .insert(PipelineKind::Geometry, geom_pipeline);
 
                         let geometry_pass = GeometryPass {
                                 name: "geometry_pass".to_string(),
@@ -728,9 +750,10 @@ impl ApplicationHandler<EngineState> for Engine
                                 {
                                         Ok(_) =>
                                         {
-                                                let window: Arc<Window> = match self.window.as_ref() {
+                                                let window: Arc<Window> = match self.window.as_ref()
+                                                {
                                                         None => return,
-                                                        Some(w) => {w.clone()}
+                                                        Some(w) => w.clone(),
                                                 };
 
                                                 window.request_redraw();
@@ -910,7 +933,7 @@ impl EngineBuilder
 
         /// Finally builds the [`Engine`].
         ///
-        /// Does some fields validation.
+        /// Does some field validation.
         ///
         /// Generates the `wgpu::Instance` and sets the `instance` field.
         ///
@@ -988,8 +1011,9 @@ impl EngineBuilder
                         log::info!("\t{}", i);
                 }
 
-                let desired =
-                        wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::POLYGON_MODE_POINT | wgpu::Features::TIMESTAMP_QUERY;
+                let desired = wgpu::Features::POLYGON_MODE_LINE
+                        | wgpu::Features::POLYGON_MODE_POINT
+                        | wgpu::Features::TIMESTAMP_QUERY;
 
                 let required_features = supported & desired;
 
