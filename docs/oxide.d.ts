@@ -9,9 +9,10 @@
  * browser console, then delegates to [`run()`].
  *
  * Error propagation:
- * - Errors from [`run()`] are mapped into a `JsValue` and returned. This causes
- *   module instantiation to fail (e.g., the loader will observe a rejected
- *   Promise or thrown exception), allowing JavaScript to handle the failure.
+ * - Errors from [`run()`] are mapped into a `JsValue` and returned. This
+ *   causes module instantiation to fail (e.g., the loader will observe a
+ *   rejected Promise or thrown exception), allowing JavaScript to handle the
+ *   failure.
  * - By default, the mapped value is a string. If your application needs a real
  *   `Error` object, adjust the mapper to return `js_sys::Error`.
  *
@@ -37,10 +38,10 @@ export interface InitOutput {
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_6: WebAssembly.Table;
-  readonly closure2904_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure865_externref_shim: (a: number, b: number, c: any) => void;
   readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h2b993972a6766d59: (a: number, b: number) => void;
-  readonly closure2909_externref_shim: (a: number, b: number, c: any, d: any) => void;
-  readonly closure3081_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure870_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure1594_externref_shim: (a: number, b: number, c: any) => void;
   readonly __wbindgen_start: () => void;
 }
 
