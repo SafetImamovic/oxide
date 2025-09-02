@@ -62,7 +62,48 @@ RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web --no-
 ```
 
 This generates the `pkg/` folder containing the `.wasm` and JS bindings.
+# Oxide Render Engine
 
+A modern, Rust-based rendering engine using wgpu, winit, and egui.
+
+## Features
+
+- Modular render pass system with a flexible render graph
+- Support for different fill modes (Fill, Wireframe, Vertex)
+- Depth buffer support for 3D rendering
+- Camera system with perspective projection
+- Cross-platform support (native and WebAssembly)
+- Integrated debug UI with egui
+
+## Architecture
+
+The engine is built around these key components:
+
+- **EngineState**: Manages GPU resources and rendering state
+- **RenderGraph**: Orchestrates render passes in a flexible pipeline
+- **RenderPass**: Interface for implementing different rendering stages
+- **PipelineManager**: Handles creation and management of rendering pipelines
+- **Camera**: 3D perspective camera system
+
+## Getting Started
+
+```rust
+fn main() -> anyhow::Result<()> {
+    // Create the engine with default settings
+    let engine = oxide::engine::EngineBuilder::new()
+        .build()?;
+
+    // Create a runner to execute the engine
+    let runner = oxide::engine::EngineRunner::new(engine)?;
+
+    // Run the engine
+    runner.run()
+}
+```
+
+## License
+
+MIT
 ---
 
 ### **4. Serve locally with Python**

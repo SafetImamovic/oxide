@@ -2,60 +2,35 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Oxide Engine</title>
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>HTML 5 Boilerplate</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
+      rel="stylesheet"
+    />
     <style>
-      canvas {
-        background-color: black;
-      }
-
       * {
         box-sizing: border-box;
         margin: 0;
         padding: 0;
-      }
-
-      body {
-        height: calc(100vh - 4rem);
-        width: calc(100vw - 4rem);
-        margin: 2rem;
+        font-family: "Cascadia Code", sans-serif;
+        font-optical-sizing: auto;
+        font-weight: <weight>;
+        font-style: normal;
       }
     </style>
   </head>
-
   <body>
-    <pre
-      style="
-        font-family: monospace;
-        background-color: #1e1e1e;
-        color: #d4d4d4;
-        padding: 1em;
-        border-radius: 8px;
-        overflow-x: auto;
-      "
-    >
-   ░██████   ░██    ░██ ░██████░███████   ░██████████ 
-  ░██   ░██   ░██  ░██    ░██  ░██   ░██  ░██         
- ░██     ░██   ░██░██     ░██  ░██    ░██ ░██         
- ░██     ░██    ░███      ░██  ░██    ░██ ░█████████  
- ░██     ░██   ░██░██     ░██  ░██    ░██ ░██         
-  ░██   ░██   ░██  ░██    ░██  ░██   ░██  ░██         
-   ░██████   ░██    ░██ ░██████░███████   ░██████████
-  
- WASD + QE for down/up</pre
-    >
-
-    <canvas id="canvas"></canvas>
-
-    <script type="module">
-      import init  from './oxide.js';
-
-      init()
-        .then(() => {
-          console.log("WASM Loaded");
-        })
-        .catch(console.error);
-    </script>
+    <h1>WebGPU Primjeri</h1>
+    <span>F12 -> konzola za dodatne informacije.</span>
+    <ol>
+      <li><a href="./oxide/index.html">Oxide</a></li>
+      <li><a href="./snake/index.html">Snake</a></li>
+      <li><a href="/">Pong</a></li>
+      <li><a href="/">Conways Game of Life</a></li>
+    </ol>
   </body>
 </html>
