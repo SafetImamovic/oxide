@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "crates/oxide", "crates/snake",
+    "crates/oxide", "crates/oxide-macro", "crates/snake",
 ]
 
 resolver = "3"

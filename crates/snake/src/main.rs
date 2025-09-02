@@ -1,9 +1,9 @@
 //#[engine_start] // To be proc_macro
 fn engine_start() {}
 
-fn main()
+fn main() -> anyhow::Result<()>
 {
-        oxide::utils::bootstrap::config_logging();
+        snake::run()?;
 
-        //log::info!("Snake");
+        Ok(())
 }
