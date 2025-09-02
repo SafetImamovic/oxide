@@ -12,6 +12,9 @@ pub enum Primitive
 #[derive(Debug)]
 pub struct Mesh
 {
+        pub position: cgmath::Point3<f32>,
+        pub direction: cgmath::Vector3<f32>,
+
         name: String,
         // CPU-Side data
         vertices: Vec<Vertex>,
@@ -24,7 +27,7 @@ pub struct Mesh
         vertex_count: u32,
         pub index_format: wgpu::IndexFormat,
 
-        needs_upload: bool,
+        pub needs_upload: bool,
 }
 
 impl Mesh
@@ -39,6 +42,8 @@ impl Mesh
                 let index_count = indices.len() as u32;
 
                 Self {
+                        position: cgmath::Point3::new(0.0, 0.0, 0.0),
+                        direction: cgmath::Vector3::new(0.0, 0.0, 0.0),
                         name: name.into(),
                         vertices,
                         indices,
@@ -107,6 +112,16 @@ impl Mesh
 
                 log::info!("Vertex and Index buffers created for mesh::{}", self.name);
 
+                for i in self.vertices.iter_mut()
+                {
+                        i.position[0] += self.direction.x;
+                        i.position[1] += self.direction.y;
+                        i.position[2] += self.direction.z;
+                }
+
+                log::info!("Mesh position: {:?}", self.position);
+                log::info!("Mesh vertices: {:?}", self.vertices);
+
                 self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
                         label: Some(&format!("mesh::{}::vertex_buffer", self.name)),
                         contents: bytemuck::cast_slice(&self.vertices),
@@ -122,10 +137,15 @@ impl Mesh
                 self.needs_upload = false;
         }
 
-        /// Convenience: builds a regular n-gon at the origin in the XY plane with the given radius.
-        /// This version constructs `Vertex` values in a minimal, generic way. Adjust if your
+        /// Convenience: builds a regular n-gon at the origin in the XY plane
+        /// with the given radius. This version constructs `Vertex`
+        /// values in a minimal, generic way. Adjust if your
         /// `Vertex` has a different layout.
-        pub fn generate_n_gon(sides: u32, radius: f32) -> Self {
+        pub fn generate_n_gon(
+                sides: u32,
+                radius: f32,
+        ) -> Self
+        {
                 // Adjust this closure to match your Vertex layout if needed.
                 Self::generate_n_gon_with_radius(sides, radius, |pos, _i| Vertex {
                         // If your Vertex doesn't have these fields or Default, adapt accordingly.
@@ -136,20 +156,28 @@ impl Mesh
 
         /// Back-compat wrapper: same as before, assumes radius = 1.0.
         /// Use `generate_n_gon_with_radius` if you need a custom radius.
-        pub fn generate_n_gon_with<F>(sides: u32, mut make_vertex: F) -> Self
+        pub fn generate_n_gon_with<F>(
+                sides: u32,
+                mut make_vertex: F,
+        ) -> Self
         where
-            F: FnMut([f32; 3], usize) -> Vertex,
+                F: FnMut([f32; 3], usize) -> Vertex,
         {
                 Self::generate_n_gon_with_radius(sides, 1.0, move |pos, i| make_vertex(pos, i))
         }
 
-        /// Flexible generator that lets you decide how to build each `Vertex`, with a custom radius.
+        /// Flexible generator that lets you decide how to build each `Vertex`,
+        /// with a custom radius.
         /// - sides >= 3
         /// - Center at origin, XY plane, Z = 0
         /// - CCW winding (positive radius). Negative radius flips winding.
-        pub fn generate_n_gon_with_radius<F>(sides: u32, radius: f32, mut make_vertex: F) -> Self
+        pub fn generate_n_gon_with_radius<F>(
+                sides: u32,
+                radius: f32,
+                mut make_vertex: F,
+        ) -> Self
         where
-            F: FnMut([f32; 3], usize) -> Vertex,
+                F: FnMut([f32; 3], usize) -> Vertex,
         {
                 assert!(sides >= 3, "n-gon must have at least 3 sides");
                 assert!(
@@ -165,7 +193,8 @@ impl Mesh
                 vertices.push(make_vertex([0.0, 0.0, 0.0], 0));
 
                 let angle_step = 2.0_f32 * std::f32::consts::PI / (sides as f32);
-                for i in 0..n {
+                for i in 0..n
+                {
                         let angle = (i as f32) * angle_step;
                         let x = radius * angle.cos();
                         let y = radius * angle.sin();
@@ -174,14 +203,17 @@ impl Mesh
 
                 // Triangle fan from center (index 0)
                 let mut indices = Vec::<u16>::with_capacity(n * 3);
-                for i in 0..n {
+                for i in 0..n
+                {
                         let b = (i + 1) as u16;
                         let c = ((i + 1) % n + 1) as u16;
                         indices.extend_from_slice(&[0, b, c]);
                 }
 
                 Mesh {
+                        position: cgmath::Point3::new(0.0, 0.0, 0.0),
                         name: format!("n-gon-{}-r{}", sides, radius),
+                        direction: cgmath::Vector3::new(0.0, 0.0, 0.0),
                         vertices,
                         indices,
                         vertex_buffer: None,
@@ -192,6 +224,4 @@ impl Mesh
                         needs_upload: true,
                 }
         }
-
-
 }

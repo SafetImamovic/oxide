@@ -27,12 +27,14 @@ use winit::platform::web::EventLoopExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+use crate::input::manager::InputManager;
 use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
 use crate::renderer::pipeline::PipelineKind;
 use crate::ui::renderer::GuiRenderer;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
+use winit::event::ElementState;
 use winit::window::Window;
 use winit::{
         application::ApplicationHandler,
@@ -131,10 +133,16 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
+        pub input_manager: InputManager,
+
         pub ui_scale: f32,
 
         /// Polygon fill mode, depends on the platforms wgpu features.
         pub fill_mode: FillMode,
+
+        pub enable_debug: bool,
+
+        pub debug_toggle_key: Option<KeyCode>,
 
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
@@ -162,6 +170,10 @@ pub struct Engine
 
 impl Engine
 {
+        pub fn input(&mut self) -> &mut InputManager
+        {
+                &mut self.input_manager
+        }
         pub fn render(&mut self) -> anyhow::Result<()>
         {
                 let state = match self.state.as_mut()
@@ -235,58 +247,61 @@ impl Engine
 
                 // ------------------ GUI ----------------------
 
-                let pixels_per_point = self.ui_scale;
-
-                let screen_descriptor = egui_wgpu::ScreenDescriptor {
-                        size_in_pixels: [
-                                state.surface_configuration.width,
-                                state.surface_configuration.height,
-                        ],
-                        pixels_per_point, /* inversely counteracts the
-                                           * Browser DPI */
-                };
-
+                if self.enable_debug
                 {
-                        let supported = state.adapter.features();
+                        let pixels_per_point = self.ui_scale;
 
-                        let desired = wgpu::Features::POLYGON_MODE_LINE
-                                | wgpu::Features::POLYGON_MODE_POINT
-                                | wgpu::Features::TIMESTAMP_QUERY;
+                        let screen_descriptor = egui_wgpu::ScreenDescriptor {
+                                size_in_pixels: [
+                                        state.surface_configuration.width,
+                                        state.surface_configuration.height,
+                                ],
+                                pixels_per_point, /* inversely counteracts the
+                                                   * Browser DPI */
+                        };
 
-                        let enabled_features = supported & desired;
-
-                        state.gui.begin_frame(&window.clone(), &mut self.ui_scale);
-
-                        let temp_fill_mode = self.fill_mode;
-
-                        state.gui.render(
-                                &mut state.render_graph,
-                                &mut self.ui_scale,
-                                &mut self.fill_mode,
-                                enabled_features,
-                        );
-
-                        if temp_fill_mode != self.fill_mode
                         {
-                                log::info!("Fill Mode: {:?}", self.fill_mode);
+                                let supported = state.adapter.features();
 
-                                // Request Pipeline Rebuild
-                                state.pipeline_manager.rebuild_geometry_pipeline(
+                                let desired = wgpu::Features::POLYGON_MODE_LINE
+                                        | wgpu::Features::POLYGON_MODE_POINT
+                                        | wgpu::Features::TIMESTAMP_QUERY;
+
+                                let enabled_features = supported & desired;
+
+                                state.gui.begin_frame(&window.clone(), &mut self.ui_scale);
+
+                                let temp_fill_mode = self.fill_mode;
+
+                                state.gui.render(
+                                        &mut state.render_graph,
+                                        &mut self.ui_scale,
+                                        &mut self.fill_mode,
+                                        enabled_features,
+                                );
+
+                                if temp_fill_mode != self.fill_mode
+                                {
+                                        log::info!("Fill Mode: {:?}", self.fill_mode);
+
+                                        // Request Pipeline Rebuild
+                                        state.pipeline_manager.rebuild_geometry_pipeline(
+                                                &state.device,
+                                                &state.surface_configuration,
+                                                self.fill_mode,
+                                                &[],
+                                        );
+                                }
+
+                                state.gui.end_frame_and_draw(
                                         &state.device,
-                                        &state.surface_configuration,
-                                        self.fill_mode,
-                                        &[],
+                                        &state.queue,
+                                        &mut encoder,
+                                        &window.clone(),
+                                        &view,
+                                        screen_descriptor,
                                 );
                         }
-
-                        state.gui.end_frame_and_draw(
-                                &state.device,
-                                &state.queue,
-                                &mut encoder,
-                                &window.clone(),
-                                &view,
-                                screen_descriptor,
-                        );
                 }
 
                 state.queue.submit(std::iter::once(encoder.finish()));
@@ -762,11 +777,13 @@ impl ApplicationHandler<EngineState> for Engine
 
                                                 let fps = 1.0 / duration.as_secs_f32();
 
+                                                /*
                                                 log::info!(
                                                         "Render frame took: {:.2} ms, FPS: {:.1}",
                                                         duration.as_secs_f64() * 1000.0,
                                                         fps
                                                 );
+                                                */
                                         }
                                         Err(e) =>
                                         {
@@ -784,11 +801,29 @@ impl ApplicationHandler<EngineState> for Engine
                                 ..
                         } =>
                         {
-                                println!("Code: {:?}, KeyState: {:?}", code, key_state);
+                                let res = &mut self.resources.lock().unwrap();
+
+                                log::info!("CALLED --- Key: {:?}, State: {:?}", code, key_state);
+                                self.input_manager.handle_event(code, key_state, res);
+
+                                res.upload_all(&state.device);
 
                                 if code == KeyCode::Escape
                                 {
                                         event_loop.exit();
+                                }
+
+                                match self.debug_toggle_key
+                                {
+                                        None =>
+                                        {}
+                                        Some(k) =>
+                                        {
+                                                if code == k && key_state == ElementState::Pressed
+                                                {
+                                                        self.enable_debug = !self.enable_debug;
+                                                }
+                                        }
                                 }
                         }
                         _ => (),
@@ -866,6 +901,9 @@ impl EngineBuilder
                         engine: Engine {
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
+                                enable_debug: false,
+                                input_manager: InputManager::new(),
+                                debug_toggle_key: None,
                                 resources,
                                 fill_mode: FillMode::Fill,
                                 ui_scale: 1.5,
@@ -889,6 +927,28 @@ impl EngineBuilder
         {
                 f(key_code);
                 self
+        }
+
+        /// Render a Debug GUI using `egui`.
+        pub fn with_debug_ui(mut self) -> Self
+        {
+                self.engine.enable_debug = true;
+                self
+        }
+
+        pub fn with_toggle(
+                mut self,
+                key_code: KeyCode,
+        ) -> anyhow::Result<Self>
+        {
+                if !self.engine.enable_debug
+                {
+                        anyhow::bail!("with_toggle: Debug UI must be enabled first");
+                }
+
+                self.engine.debug_toggle_key = Some(key_code);
+
+                Ok(self)
         }
 
         /// Set the time (for delta timing)

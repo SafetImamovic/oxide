@@ -200,6 +200,7 @@ dependencies = [
  "oxide-macro",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "winit",
 ]
 
 [[package]]
@@ -1905,6 +1906,7 @@ name = "snake"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cgmath",
  "console_error_panic_hook",
  "console_log",
  "env_logger",
@@ -1914,6 +1916,7 @@ dependencies = [
  "oxide-macro",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "winit",
 ]
 
 [[package]]

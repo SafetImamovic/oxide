@@ -1,12 +1,16 @@
 use oxide::geometry::mesh::{Mesh, Primitive};
 use oxide_macro::oxide_main;
+use winit::keyboard::KeyCode;
 
 #[oxide_main]
 pub fn run() -> anyhow::Result<()>
 {
         oxide::utils::bootstrap::show_start_message();
 
-        let engine = oxide::engine::EngineBuilder::new().build()?;
+        let engine = oxide::engine::EngineBuilder::new()
+                .with_debug_ui()
+                .with_toggle(KeyCode::Tab)?
+                .build()?;
 
         let _mesh_pentagon = Mesh::basic("pentagon", Primitive::Pentagon);
 

@@ -28,6 +28,8 @@ impl Resources
                 device: &wgpu::Device,
         )
         {
+                log::info!("Uploading all resources...");
+
                 for mesh in self.meshes.iter_mut()
                 {
                         if mesh.needs_upload()

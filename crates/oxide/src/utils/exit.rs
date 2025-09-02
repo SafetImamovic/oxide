@@ -3,10 +3,7 @@ use colored::*;
 use crate::utils::random::get_random_u128;
 
 #[cfg(target_arch = "wasm32")]
-pub fn show_exit_message()
-{
-
-}
+pub fn show_exit_message() {}
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn show_exit_message()

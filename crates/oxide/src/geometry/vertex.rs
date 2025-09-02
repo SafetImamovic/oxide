@@ -3,8 +3,7 @@
 /// Uses C-compatible memory layout (`#[repr(C)]`)
 /// so it can be safely shared with GPU graphics APIs.
 #[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, Default)]
 pub struct Vertex
 {
         pub position: [f32; 3],
@@ -25,8 +24,7 @@ impl Vertex
                                         format: wgpu::VertexFormat::Float32x3,
                                 },
                                 wgpu::VertexAttribute {
-                                        offset: size_of::<[f32; 3]>()
-                                                as wgpu::BufferAddress,
+                                        offset: size_of::<[f32; 3]>() as wgpu::BufferAddress,
                                         shader_location: 1,
                                         format: wgpu::VertexFormat::Float32x2,
                                 },
@@ -34,4 +32,3 @@ impl Vertex
                 }
         }
 }
-
