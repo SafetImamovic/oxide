@@ -11,8 +11,8 @@ path = "./src/main.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-oxide = {path = "../../oxide"}
-oxide-macro = {path = "../../oxide-macro"}
+oxide = { path = "../../oxide" }
+oxide-macro = { path = "../../oxide-macro" }
 anyhow = "1.0.99"
 env_logger = "0.11.8"
 log = "0.4.27"

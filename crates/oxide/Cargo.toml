@@ -8,7 +8,7 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-oxide-macro = {path = "../oxide-macro"}
+oxide-macro = { path = "../oxide-macro" }
 serde = { version = "1.0.219", features = ["derive"] }
 toml = { version = "0.9.4", features = ["serde"] }
 anyhow = "1.0.98"
@@ -17,9 +17,9 @@ env_logger = "0.11.8"
 log = "0.4.27"
 wgpu = "25.0.2"
 pollster = "0.4.0"
-bytemuck = { version = "1.23.2", features = [ "derive" ] }
+bytemuck = { version = "1.23.2", features = ["derive"] }
 # Modified egui dependencies without clipboard
-egui = { version = "0.32.0",  features = [] }
+egui = { version = "0.32.0", features = [] }
 egui-wgpu = { version = "0.32.0", default-features = false }
 egui-winit = { version = "0.32.0", default-features = false }
 colored = "3.0.0"
@@ -39,7 +39,7 @@ features = ["png", "jpeg"]
 instant = { version = "0.1.13", features = ["wasm-bindgen"] }
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
-wgpu = { version = "25.0.2", features = ["webgl"]}
+wgpu = { version = "25.0.2", features = ["webgl"] }
 wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "0.4.50"
 web-sys = { version = "0.3.77", features = [
@@ -48,7 +48,7 @@ web-sys = { version = "0.3.77", features = [
     "Element",
     "Navigator",
     "HtmlElement"
-]}
+] }
 # Modified egui for WASM without clipboard
 egui = { version = "0.32.0", default-features = false, features = [] }
 

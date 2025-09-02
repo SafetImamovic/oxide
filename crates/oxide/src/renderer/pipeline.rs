@@ -164,10 +164,7 @@ impl PipelineManager
                 let shader = PipelineManager::load_shader_module(device);
 
                 let render_pipeline_layout =
-                        PipelineManager::new_render_pipeline_layout(
-                                device,
-                                bind_groups,
-                        );
+                        PipelineManager::new_render_pipeline_layout(device, bind_groups);
 
                 let vertex_buffer = Vertex::get_desc();
 

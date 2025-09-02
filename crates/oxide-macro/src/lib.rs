@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::ItemFn;
 use syn::parse_macro_input;
+use syn::ItemFn;
 
 #[proc_macro_attribute]
 pub fn oxide_main(

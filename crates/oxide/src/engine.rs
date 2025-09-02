@@ -27,12 +27,14 @@ use winit::platform::web::EventLoopExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+use crate::input::manager::InputManager;
 use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
 use crate::renderer::pipeline::PipelineKind;
 use crate::ui::renderer::GuiRenderer;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
+use winit::event::ElementState;
 use winit::window::Window;
 use winit::{
         application::ApplicationHandler,
@@ -41,8 +43,6 @@ use winit::{
         keyboard::{KeyCode, PhysicalKey},
         window::WindowId,
 };
-use winit::event::ElementState;
-use crate::input::manager::InputManager;
 
 /// Runner for the [`Engine`].
 pub struct EngineRunner
@@ -803,7 +803,6 @@ impl ApplicationHandler<EngineState> for Engine
                         {
                                 let res = &mut self.resources.lock().unwrap();
 
-                                // Called
                                 log::info!("CALLED --- Key: {:?}, State: {:?}", code, key_state);
                                 self.input_manager.handle_event(code, key_state, res);
 
@@ -814,13 +813,15 @@ impl ApplicationHandler<EngineState> for Engine
                                         event_loop.exit();
                                 }
 
-                                match self.debug_toggle_key {
-                                        None => {}
-                                        Some(k) => {
-
+                                match self.debug_toggle_key
+                                {
+                                        None =>
+                                        {}
+                                        Some(k) =>
+                                        {
                                                 if code == k && key_state == ElementState::Pressed
                                                 {
-                                                self.enable_debug = !self.enable_debug;
+                                                        self.enable_debug = !self.enable_debug;
                                                 }
                                         }
                                 }
@@ -935,7 +936,10 @@ impl EngineBuilder
                 self
         }
 
-        pub fn with_toggle(mut self, key_code: KeyCode) -> anyhow::Result<Self>
+        pub fn with_toggle(
+                mut self,
+                key_code: KeyCode,
+        ) -> anyhow::Result<Self>
         {
                 if !self.engine.enable_debug
                 {

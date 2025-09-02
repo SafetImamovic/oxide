@@ -1,6 +1,6 @@
 use std::{
-    any::Any,
-    sync::{Arc, Mutex},
+        any::Any,
+        sync::{Arc, Mutex},
 };
 
 use derivative::Derivative;
@@ -217,8 +217,10 @@ impl RenderPass for GeometryPass
                                 ui.label("StoreOp: Store");
                                 ui.label("Depth/stencil attachment: None");
 
-                                if ui.button("Refresh Geometry").clicked() {
-                                    // This could trigger a refresh of geometry data
+                                if ui.button("Refresh Geometry").clicked()
+                                {
+                                        // This could trigger a refresh of
+                                        // geometry data
                                 }
                         });
         }
@@ -243,8 +245,6 @@ impl RenderPass for GeometryPass
                 pipeline_manager: &PipelineManager,
         )
         {
-
-
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some(&self.name),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
