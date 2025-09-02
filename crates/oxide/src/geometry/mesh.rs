@@ -12,6 +12,9 @@ pub enum Primitive
 #[derive(Debug)]
 pub struct Mesh
 {
+        pub position: cgmath::Point3<f32>,
+        pub direction: cgmath::Vector3<f32>,
+
         name: String,
         // CPU-Side data
         vertices: Vec<Vertex>,
@@ -24,7 +27,7 @@ pub struct Mesh
         vertex_count: u32,
         pub index_format: wgpu::IndexFormat,
 
-        needs_upload: bool,
+        pub needs_upload: bool,
 }
 
 impl Mesh
@@ -39,6 +42,8 @@ impl Mesh
                 let index_count = indices.len() as u32;
 
                 Self {
+                        position: cgmath::Point3::new(0.0, 0.0, 0.0),
+                        direction: cgmath::Vector3::new(0.0, 0.0, 0.0),
                         name: name.into(),
                         vertices,
                         indices,
@@ -106,6 +111,15 @@ impl Mesh
                 }
 
                 log::info!("Vertex and Index buffers created for mesh::{}", self.name);
+
+                for i in self.vertices.iter_mut() {
+                       i.position[0] +=  self.direction.x;
+                       i.position[1] +=  self.direction.y;
+                       i.position[2] +=  self.direction.z;
+                }
+
+                log::info!("Mesh position: {:?}", self.position);
+                log::info!("Mesh vertices: {:?}", self.vertices);
 
                 self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
                         label: Some(&format!("mesh::{}::vertex_buffer", self.name)),
@@ -181,7 +195,9 @@ impl Mesh
                 }
 
                 Mesh {
+                        position: cgmath::Point3::new(0.0, 0.0, 0.0),
                         name: format!("n-gon-{}-r{}", sides, radius),
+                        direction: cgmath::Vector3::new(0.0, 0.0, 0.0),
                         vertices,
                         indices,
                         vertex_buffer: None,

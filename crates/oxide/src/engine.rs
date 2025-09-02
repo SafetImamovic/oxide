@@ -42,6 +42,7 @@ use winit::{
         window::WindowId,
 };
 use winit::event::ElementState;
+use crate::input::manager::InputManager;
 
 /// Runner for the [`Engine`].
 pub struct EngineRunner
@@ -132,6 +133,8 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
+        pub input_manager: InputManager,
+
         pub ui_scale: f32,
 
         /// Polygon fill mode, depends on the platforms wgpu features.
@@ -167,6 +170,10 @@ pub struct Engine
 
 impl Engine
 {
+        pub fn input(&mut self) -> &mut InputManager
+        {
+                &mut self.input_manager
+        }
         pub fn render(&mut self) -> anyhow::Result<()>
         {
                 let state = match self.state.as_mut()
@@ -794,7 +801,13 @@ impl ApplicationHandler<EngineState> for Engine
                                 ..
                         } =>
                         {
-                                println!("Code: {:?}, KeyState: {:?}", code, key_state);
+                                let res = &mut self.resources.lock().unwrap();
+
+                                // Called
+                                log::info!("CALLED --- Key: {:?}, State: {:?}", code, key_state);
+                                self.input_manager.handle_event(code, key_state, res);
+
+                                res.upload_all(&state.device);
 
                                 if code == KeyCode::Escape
                                 {
@@ -888,6 +901,7 @@ impl EngineBuilder
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 enable_debug: false,
+                                input_manager: InputManager::new(),
                                 debug_toggle_key: None,
                                 resources,
                                 fill_mode: FillMode::Fill,
