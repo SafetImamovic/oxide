@@ -32,7 +32,10 @@ pub fn oxide_main(
             #[cfg(target_arch = "wasm32")]
             #[wasm_bindgen::prelude::wasm_bindgen(start)]
             pub fn run_wasm() -> Result<(), wasm_bindgen::JsValue> {
+                use wasm_bindgen::UnwrapThrowExt;
+
                 console_error_panic_hook::set_once();
+
                 console_log::init_with_level(log::Level::Info).unwrap_throw();
 
                 #fn_name().map_err(|e| {
