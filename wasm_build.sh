@@ -26,6 +26,9 @@ for crate_path in "$CRATES_DIR"/*/; do
         rm -rf "../../$DOCS_DIR/$crate_name"
         mv pkg "../../$DOCS_DIR/$crate_name"
 
+        # Remove .gitignore files in the moved folder
+        find "../../$DOCS_DIR/$crate_name" -name ".gitignore" -type f -exec rm -f {} \;
+
         # Create an HTML entrypoint
         html_file="../../$DOCS_DIR/$crate_name/index.html"
         echo "Creating HTML entrypoint at $html_file"
@@ -34,7 +37,7 @@ for crate_path in "$CRATES_DIR"/*/; do
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Example | $crate_name</title>
+    <title>Primjer | $crate_name</title>
     <style>
         canvas {
           background-color: black;
@@ -77,5 +80,5 @@ EOL
     popd > /dev/null
 done
 
-echo "All crates built, moved to $DOCS_DIR, and HTML entrypoints created."
+echo "All crates built, moved to $DOCS_DIR, .gitignore files removed, and HTML entrypoints created."
 
