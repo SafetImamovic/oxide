@@ -1,0 +1,15 @@
+{
+  "name": "basic",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "basic_bg.wasm",
+    "basic.js",
+    "basic.d.ts"
+  ],
+  "main": "basic.js",
+  "types": "basic.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

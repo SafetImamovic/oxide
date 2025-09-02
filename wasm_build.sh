@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Root directories
-CRATES_DIR="crates"
+CRATES_DIR="crates/examples"
 DOCS_DIR="docs"
 
 # Ensure docs folder exists
@@ -23,14 +23,14 @@ for crate_path in "$CRATES_DIR"/*/; do
     # Move and rename pkg folder to docs/<crate_name>
     if [ -d "pkg" ]; then
         echo "Moving pkg to $DOCS_DIR/$crate_name"
-        rm -rf "../../$DOCS_DIR/$crate_name"
-        mv pkg "../../$DOCS_DIR/$crate_name"
+        rm -rf "../../../$DOCS_DIR/$crate_name"
+        mv pkg "../../../$DOCS_DIR/$crate_name"
 
         # Remove .gitignore files in the moved folder
-        find "../../$DOCS_DIR/$crate_name" -name ".gitignore" -type f -exec rm -f {} \;
+        find "../../../$DOCS_DIR/$crate_name" -name ".gitignore" -type f -exec rm -f {} \;
 
         # Create an HTML entrypoint
-        html_file="../../$DOCS_DIR/$crate_name/index.html"
+        html_file="../../../$DOCS_DIR/$crate_name/index.html"
         echo "Creating HTML entrypoint at $html_file"
         cat > "$html_file" <<EOL
 <!DOCTYPE html>

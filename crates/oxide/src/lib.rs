@@ -22,10 +22,8 @@
 //!
 //! Example native binary (thin wrapper that just calls the library):
 //! ```rust
-//! fn main() {
-//!     // The engine is created inside `oxide::run()`
-//!     oxide::run().unwrap()
-//! }
+//! // The engine is created inside `oxide::run()`
+//! oxide::run().unwrap()
 //! ```
 //!
 //! # WebAssembly usage
@@ -112,6 +110,52 @@
 //!   wiring.
 //!
 //! Feedback is welcome as this thesis project evolves.
+//!
+//! Starts the Oxide runtime and blocks until the application exits.
+//!
+//! This is the canonical entry point for both native and WebAssembly targets.
+//! The engine is constructed internally by this function; you cannot
+//! instantiate or customize the engine from your own `main()` or any other
+//! function at this time due to current WebAssembly constraints (tooling builds
+//! and loads a library, not a standalone binary).
+//!
+//! Behavior:
+//! - Initializes logging and prints a startup message.
+//! - Builds the engine internally and registers a few basic meshes in the
+//!   shared resources (useful as ready-made primitives for quick experiments).
+//! - Creates the event-loop runner and enters the main loop; this call blocks
+//!   until the window/tab is closed or the loop terminates.
+//! - Shows an exit message and returns.
+//!
+//! Platform notes:
+//! - Native: you may create a tiny binary whose `main()` simply calls
+//!   `oxide::run()`. The engine itself is still created inside this function.
+//! - WebAssembly: build your app as a library crate (e.g., `cargo new your_app
+//!   --lib`) and compile for `wasm32`. The engine must be defined inside this
+//!   `run()` function; do not attempt to construct it elsewhere. The host
+//!   (e.g., the browser/bundler) will drive the runtime, and this function will
+//!   manage initialization on your behalf.
+//!
+//! Roadmap:
+//! - A procedural macro is planned to let applications hook into initialization
+//!   while keeping the WebAssembly-friendly setup. Until then, `run()` remains
+//!   the only place where the engine is constructed.
+//! - This crate is developed as part of a Bachelor's thesis project; APIs are
+//!   subject to change.
+//!
+//! # Returns
+//!
+//! - `Ok(())` when the event loop exits cleanly.
+//! - An error if engine construction or the runner encounter a failure.
+//!
+//! # Example
+//!
+//! Example (native wrapper):
+//! ```no_run
+//! {
+//! // Engine is created inside `oxide::run()`.
+//! oxide::run().unwrap()
+//! ```
 
 pub mod engine;
 pub mod geometry;
@@ -121,115 +165,3 @@ pub mod resource;
 pub mod texture;
 pub mod ui;
 pub mod utils;
-
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-
-use crate::geometry::mesh::{Mesh, Primitive};
-
-/// Starts the Oxide runtime and blocks until the application exits.
-///
-/// This is the canonical entry point for both native and WebAssembly targets.
-/// The engine is constructed internally by this function; you cannot
-/// instantiate or customize the engine from your own `main()` or any other
-/// function at this time due to current WebAssembly constraints (tooling builds
-/// and loads a library, not a standalone binary).
-///
-/// Behavior:
-/// - Initializes logging and prints a startup message.
-/// - Builds the engine internally and registers a few basic meshes in the
-///   shared resources (useful as ready-made primitives for quick experiments).
-/// - Creates the event-loop runner and enters the main loop; this call blocks
-///   until the window/tab is closed or the loop terminates.
-/// - Shows an exit message and returns.
-///
-/// Platform notes:
-/// - Native: you may create a tiny binary whose `main()` simply calls
-///   `oxide::run()`. The engine itself is still created inside this function.
-/// - WebAssembly: build your app as a library crate (e.g., `cargo new your_app
-///   --lib`) and compile for `wasm32`. The engine must be defined inside this
-///   `run()` function; do not attempt to construct it elsewhere. The host
-///   (e.g., the browser/bundler) will drive the runtime, and this function will
-///   manage initialization on your behalf.
-///
-/// Roadmap:
-/// - A procedural macro is planned to let applications hook into initialization
-///   while keeping the WebAssembly-friendly setup. Until then, `run()` remains
-///   the only place where the engine is constructed.
-/// - This crate is developed as part of a Bachelor's thesis project; APIs are
-///   subject to change.
-///
-/// # Returns
-///
-/// - `Ok(())` when the event loop exits cleanly.
-/// - An error if engine construction or the runner encounter a failure.
-///
-/// # Example
-///
-/// Example (native wrapper):
-/// ```no_run
-/// {
-/// // Engine is created inside `oxide::run()`.
-/// oxide::run().unwrap()
-/// ```
-pub fn run() -> anyhow::Result<()>
-{
-        utils::bootstrap::config_logging();
-
-        utils::bootstrap::show_start_message();
-
-        let engine = engine::EngineBuilder::new().build()?;
-
-        let _mesh_pentagon = Mesh::basic("pentagon", Primitive::Pentagon);
-
-        let _mesh_square = Mesh::basic("square", Primitive::Square);
-
-        let _mesh_triangle = Mesh::basic("triangle", Primitive::Triangle);
-
-        let hexagon = Mesh::generate_n_gon(128, 0.75);
-
-        {
-                let mut resources = engine.resources.lock().unwrap_or_else(|e| e.into_inner());
-
-                resources.add_mesh(hexagon);
-        }
-
-        let runner = engine::EngineRunner::new(engine)?;
-
-        runner.run()?;
-
-        utils::exit::show_exit_message();
-
-        Ok(())
-}
-
-/// WebAssembly start entry point for the runtime.
-///
-/// Compiled and exported only on `wasm32` targets, this function is invoked
-/// automatically by the `wasm-bindgen` bootstrap when the module is
-/// instantiated. It installs a panic hook so Rust panics are logged to the
-/// browser console, then delegates to [`run()`].
-///
-/// Error propagation:
-/// - Errors from [`run()`] are mapped into a `JsValue` and returned. This
-///   causes module instantiation to fail (e.g., the loader will observe a
-///   rejected Promise or thrown exception), allowing JavaScript to handle the
-///   failure.
-/// - By default, the mapped value is a string. If your application needs a real
-///   `Error` object, adjust the mapper to return `js_sys::Error`.
-///
-/// Returns:
-/// - `Ok(())` on successful initialization and startup.
-/// - `Err(JsValue)` if initialization fails; the value contains a formatted
-///   error message.
-///
-/// This function is not meant to be called directly from JavaScript; it runs
-/// once on module load.
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(start)]
-pub fn run_oxide_wasm() -> Result<(), JsValue>
-{
-        console_error_panic_hook::set_once();
-
-        run().map_err(|e| JsValue::from_str(&format!("oxide run failed: {e:#}")))
-}
