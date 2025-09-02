@@ -200,6 +200,7 @@ dependencies = [
  "oxide-macro",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "winit",
 ]
 
 [[package]]
