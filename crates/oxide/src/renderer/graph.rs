@@ -18,6 +18,13 @@ pub struct RenderGraph
 
 impl RenderGraph
 {
+        pub fn new() -> Self
+        {
+                Self {
+                        passes: Vec::new(),
+                }
+        }
+
         pub fn add_pass(
                 &mut self,
                 pass: Box<dyn RenderPass>,

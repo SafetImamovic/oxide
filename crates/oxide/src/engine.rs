@@ -20,7 +20,6 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
-use wgpu::PresentMode;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
 
@@ -33,8 +32,9 @@ use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
 use crate::renderer::pipeline::PipelineKind;
 use crate::renderer::surface::SurfaceManager;
-use crate::ui::renderer::GuiRenderer;
+use crate::ui::UiSystem;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
+use anyhow::{Context, Result};
 use winit::event::ElementState;
 use winit::window::Window;
 use winit::{
@@ -63,7 +63,7 @@ impl EngineRunner
         /// # Returns
         ///
         /// `anyhow::Result<EngineRunner>`.
-        pub fn new(#[allow(unused_mut)] mut engine: Engine) -> anyhow::Result<Self>
+        pub fn new(#[allow(unused_mut)] mut engine: Engine) -> Result<Self>
         {
                 let event_loop: EventLoop<EngineState> = EventLoop::with_user_event().build()?;
 
@@ -87,7 +87,7 @@ impl EngineRunner
         /// # Returns
         ///
         /// `anyhow::Result<()>`. because `run_app()` returns a Result.
-        pub fn run(self) -> anyhow::Result<()>
+        pub fn run(self) -> Result<()>
         {
                 #[allow(unused_mut)]
                 let mut engine = match self.engine
@@ -134,7 +134,7 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
-        /// Manages all of the defined keybinds and behaviour.
+        /// Manages all the defined keybinds and behavior.
         pub input_manager: InputManager,
 
         pub ui_scale: f32,
@@ -165,9 +165,6 @@ pub struct Engine
         // --- Misc ---
         /// Input system state (keyboard, mouse, gamepad, etc.).
         pub input: Option<crate::input::InputState>,
-
-        /// Optional UI system (e.g., egui) for rendering overlays.
-        pub ui: Option<crate::ui::UiSystem>,
 }
 
 impl Engine
@@ -176,140 +173,38 @@ impl Engine
         {
                 &mut self.input_manager
         }
-        pub fn render(&mut self) -> anyhow::Result<()>
+
+        pub fn render(&mut self) -> Result<()>
         {
-                let state = match self.state.as_mut()
-                {
-                        None =>
-                        {
-                                anyhow::bail!("EngineState doesn't exist.");
-                        }
-                        Some(s) => s,
-                };
+                let state = self.state.as_mut().context("EngineState missing")?;
+                let window = self.window.as_ref().context("Window missing")?;
 
-                let window = match self.window.as_ref()
-                {
-                        None =>
-                        {
-                                anyhow::bail!("Window doesn't exist.");
-                        }
-                        Some(w) => w.clone(),
-                };
+                #[rustfmt::skip]
+                let Some((output, frame, mut encoder)) =
+                        state.surface_manager.acquire_frame(&state.device)?
+                else { return Ok(()); };
 
-                // The _resize() method is called and sets this flag to true
-                if !state.surface_manager.is_surface_configured
-                {
-                        return Ok(());
-                }
-
-                // Get the surface texture ONCE per frame
-                //
-                // Returns the next texture to be presented by the swapchain for drawing.
-                //
-                // In order to present the SurfaceTexture returned by this method,
-                // first a Queue::submit needs to be done with some work rendering to this
-                // texture. Then SurfaceTexture::present needs to be called.
-                //
-                // ```rust
-                // state.queue.submit(std::iter::once(encoder.finish())); // oxide::EngineState
-                // output.present(); // wgpu::SurfaceTexture
-                // ```
-                //
-                // If a SurfaceTexture referencing this surface is alive when the swapchain is
-                // recreated, recreating the swapchain will panic
-                let output = match state.surface_manager.surface.get_current_texture()
-                {
-                        Ok(frame) => frame,
-                        Err(wgpu::SurfaceError::Outdated) =>
-                        {
-                                // This often happens during window resizing
-                                println!("wgpu surface outdated");
-                                return Err(wgpu::SurfaceError::Outdated).map_err(Into::into);
-                        }
-                        Err(e) =>
-                        {
-                                eprintln!("Failed to acquire surface texture: {:?}", e);
-                                return Err(e).map_err(Into::into);
-                        }
-                };
-
-                let view = output
-                        .texture
-                        .create_view(&wgpu::TextureViewDescriptor::default());
-
-                let mut encoder =
-                        state.device
-                                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                        label: Some("Main Render Encoder"),
-                                });
-
-                // Pass depth texture view to render graph
                 state.render_graph
-                        .execute(&view, &mut encoder, &state.pipeline_manager);
+                        .execute(&frame, &mut encoder, &state.pipeline_manager);
 
-                // ------------------ GUI ----------------------
+                log::info!(
+                        "enable_debug: {:?}, debug_toggle_key: {:?},",
+                        self.enable_debug,
+                        self.debug_toggle_key
+                );
 
                 if self.enable_debug
                 {
-                        let pixels_per_point = self.ui_scale;
-
-                        let screen_descriptor = egui_wgpu::ScreenDescriptor {
-                                size_in_pixels: [
-                                        state.surface_manager.configuration.width,
-                                        state.surface_manager.configuration.height,
-                                ],
-                                pixels_per_point, /* inversely counteracts the
-                                                   * Browser DPI */
-                        };
-
-                        {
-                                let supported = state.adapter.features();
-
-                                let desired = wgpu::Features::POLYGON_MODE_LINE
-                                        | wgpu::Features::POLYGON_MODE_POINT
-                                        | wgpu::Features::TIMESTAMP_QUERY;
-
-                                let enabled_features = supported & desired;
-
-                                state.gui.begin_frame(&window.clone(), &mut self.ui_scale);
-
-                                let temp_fill_mode = self.fill_mode;
-
-                                state.gui.render(
-                                        &mut state.render_graph,
-                                        &mut self.ui_scale,
-                                        &mut self.fill_mode,
-                                        enabled_features,
-                                );
-
-                                if temp_fill_mode != self.fill_mode
-                                {
-                                        log::info!("Fill Mode: {:?}", self.fill_mode);
-
-                                        // Request Pipeline Rebuild
-                                        state.pipeline_manager.rebuild_geometry_pipeline(
-                                                &state.device,
-                                                &state.surface_manager.configuration,
-                                                self.fill_mode,
-                                                &[],
-                                        );
-                                }
-
-                                state.gui.end_frame_and_draw(
-                                        &state.device,
-                                        &state.queue,
-                                        &mut encoder,
-                                        &window.clone(),
-                                        &view,
-                                        screen_descriptor,
-                                );
-                        }
+                        state.show_debug_window(
+                                window.clone(),
+                                &mut self.fill_mode,
+                                &frame,
+                                &mut encoder,
+                        );
                 }
 
                 state.queue.submit(std::iter::once(encoder.finish()));
-
                 output.present();
-
                 Ok(())
         }
 
@@ -317,6 +212,7 @@ impl Engine
         {
                 #[cfg(target_arch = "wasm32")]
                 {
+                        log::info!("fn resize() -> GOT HERE: Resizing...");
                         let (width, height) = Self::get_body_size().unwrap();
                         self._resize(width, height);
                 }
@@ -359,18 +255,16 @@ impl Engine
         {
                 if width == 0 || height == 0
                 {
+                        log::info!("Window size is 0, skipping resize.");
                         return;
                 }
 
-                let state = &mut self.state.as_mut().unwrap();
+                let state = self.state.as_mut().unwrap();
 
                 // Clamping to max dim to prevent panic!
                 let max_dim = state.device.limits().max_texture_dimension_2d;
                 let final_width = width.min(max_dim);
                 let final_height = height.min(max_dim);
-
-                //log::info!("Resizing surface -> width: {}, height: {}", final_width,
-                // final_height);
 
                 state.surface_manager.configuration.width = final_width;
                 state.surface_manager.configuration.height = final_height;
@@ -399,7 +293,7 @@ impl Engine
 #[derive(Debug)]
 pub struct EngineState
 {
-        pub gui: GuiRenderer,
+        pub instance: wgpu::Instance,
 
         /// The rendering surface tied to the window.
         pub surface_manager: SurfaceManager,
@@ -420,6 +314,8 @@ pub struct EngineState
         pub render_graph: RenderGraph,
 
         pub pipeline_manager: PipelineManager,
+
+        pub gui: UiSystem,
 }
 
 impl EngineState
@@ -434,11 +330,13 @@ impl EngineState
         /// # Panics
         /// Panics if surface creation, adapter selection, or device/queue
         /// creation fails.
-        pub async fn new(window: Arc<Window>) -> anyhow::Result<EngineState>
+        pub async fn new(window: Arc<Window>) -> Result<EngineState>
         {
                 let instance = EngineBuilder::instance();
 
                 Self::log_all_adapters(&instance);
+
+                let size = window.inner_size();
 
                 let adapter = EngineBuilder::adapter(&instance, window.clone()).await?;
 
@@ -447,21 +345,53 @@ impl EngineState
                 let (device, queue) = EngineBuilder::device_queue(&adapter).await?;
 
                 let surface_manager =
-                        SurfaceManager::new(&instance, window.clone(), &adapter, &device)?;
+                        SurfaceManager::new(&instance, window.clone(), &size, &adapter)?;
 
-                let mut pipeline_manager = PipelineManager::new();
+                let pipeline_manager = PipelineManager::new();
 
-                let geom_pipeline = PipelineManager::create_geometry_pipeline(
+                let render_graph = RenderGraph::new();
+
+                let gui = UiSystem::new(
                         &device,
-                        &surface_manager.configuration,
+                        &surface_manager.configuration.format,
+                        None,
+                        1,
+                        &window,
+                );
+
+                Ok(EngineState {
+                        instance,
+                        render_graph,
+                        pipeline_manager,
+                        adapter,
+                        device,
+                        queue,
+                        gui,
+                        surface_manager,
+                        index_buffers: vec![],
+                        vertex_buffers: vec![],
+                })
+        }
+
+        pub fn build_pipelines(&mut self)
+        {
+                let geom_pipeline = PipelineManager::create_geometry_pipeline(
+                        &self.device,
+                        &self.surface_manager.configuration,
                         &[],
                         &FillMode::Fill,
                 );
 
-                pipeline_manager
+                self.pipeline_manager
                         .render_pipelines
                         .insert(PipelineKind::Geometry, geom_pipeline);
+        }
 
+        pub fn build_passes(
+                &mut self,
+                resources: Arc<Mutex<Resources>>,
+        )
+        {
                 let bg_pass = BackgroundPass {
                         name: "bg_pass".to_string(),
                         enabled: true,
@@ -495,33 +425,84 @@ impl EngineState
                         },
                 };
 
-                let mut render_graph = RenderGraph {
-                        passes: vec![],
+                let geometry_pass = GeometryPass {
+                        name: "geometry_pass".to_string(),
+                        enabled: true,
+                        resources: resources.clone(),
                 };
 
-                render_graph.add_pass(Box::new(bg_pass));
-                render_graph.add_pass(Box::new(bg_pass_2));
-                render_graph.add_pass(Box::new(bg_pass_3));
+                self.render_graph.add_pass(Box::new(bg_pass));
+                self.render_graph.add_pass(Box::new(bg_pass_2));
+                self.render_graph.add_pass(Box::new(bg_pass_3));
+                self.render_graph.add_pass(Box::new(geometry_pass));
+        }
 
-                let gui = GuiRenderer::new(
-                        &device,
-                        &surface_manager.configuration.format,
-                        None,
-                        1,
-                        &window,
-                );
+        pub fn show_debug_window(
+                &mut self,
+                window: Arc<Window>,
+                fill_mode: &mut FillMode,
+                frame: &wgpu::TextureView,
+                encoder: &mut wgpu::CommandEncoder,
+        )
+        {
+                let pixels_per_point = self.gui.ui_scale;
 
-                Ok(EngineState {
-                        render_graph,
-                        pipeline_manager,
-                        gui,
-                        adapter,
-                        device,
-                        queue,
-                        surface_manager,
-                        index_buffers: vec![],
-                        vertex_buffers: vec![],
-                })
+                log::info!("configuration:{ :? } ", self.surface_manager.configuration);
+
+                let screen_descriptor = egui_wgpu::ScreenDescriptor {
+                        size_in_pixels: [
+                                self.surface_manager.configuration.width,
+                                self.surface_manager.configuration.height,
+                        ],
+                        pixels_per_point, /* inversely counteracts the
+                                           * Browser DPI */
+                };
+
+                {
+                        let supported = self.adapter.features();
+
+                        let desired = wgpu::Features::POLYGON_MODE_LINE
+                                | wgpu::Features::POLYGON_MODE_POINT
+                                | wgpu::Features::TIMESTAMP_QUERY;
+
+                        let enabled_features = supported & desired;
+
+                        self.gui.renderer
+                                .begin_frame(window.clone().as_ref(), &mut self.gui.ui_scale);
+
+                        let mut temp_fill_mode = fill_mode.clone();
+
+                        self.gui.renderer.render(
+                                &mut self.render_graph,
+                                &mut self.gui.ui_scale,
+                                &mut temp_fill_mode,
+                                enabled_features,
+                        );
+
+                        if temp_fill_mode != *fill_mode
+                        {
+                                log::info!("Fill Mode: {:?}", temp_fill_mode);
+
+                                // Request Pipeline Rebuild
+                                self.pipeline_manager.rebuild_geometry_pipeline(
+                                        &self.device,
+                                        &self.surface_manager.configuration,
+                                        temp_fill_mode,
+                                        &[],
+                                );
+                        }
+
+                        *fill_mode = temp_fill_mode;
+
+                        self.gui.renderer.end_frame_and_draw(
+                                &self.device,
+                                &self.queue,
+                                encoder,
+                                window.clone().as_ref(),
+                                &frame,
+                                screen_descriptor,
+                        );
+                }
         }
 
         pub fn log_adapter_info(adapter: &wgpu::Adapter)
@@ -645,15 +626,13 @@ impl ApplicationHandler<EngineState> for Engine
                 {
                         let state = self.state.as_mut().unwrap();
 
-                        let geometry_pass = GeometryPass {
-                                name: "geometry_pass".to_string(),
-                                enabled: true,
-                                resources: self.resources.clone(),
-                        };
-
-                        state.render_graph.add_pass(Box::new(geometry_pass));
-
                         self.resources.lock().unwrap().upload_all(&state.device);
+
+                        let state = self.state.as_mut().unwrap();
+
+                        state.build_pipelines();
+
+                        state.build_passes(self.resources.clone());
                 }
         }
 
@@ -678,37 +657,11 @@ impl ApplicationHandler<EngineState> for Engine
 
                         let state = self.state.as_mut().unwrap();
 
-                        let device: &wgpu::Device = &state.device;
-
-                        let depth_texture = crate::texture::Texture::create_depth_texture(
-                                &state.device,
-                                &state.surface_configuration,
-                                "depth_texture",
-                        );
-
-                        //let mut pipeline_manager = PipelineManager::new();
-
-                        let geom_pipeline = PipelineManager::create_geometry_pipeline(
-                                &device,
-                                &state.surface_configuration,
-                                &[],
-                                &depth_texture,
-                                &FillMode::Fill,
-                        );
-
-                        state.pipeline_manager
-                                .render_pipelines
-                                .insert(PipelineKind::Geometry, geom_pipeline);
-
-                        let geometry_pass = GeometryPass {
-                                name: "geometry_pass".to_string(),
-                                enabled: true,
-                                resources: self.resources.clone(),
-                        };
-
-                        state.render_graph.add_pass(Box::new(geometry_pass));
-
                         self.resources.lock().unwrap().upload_all(&state.device);
+
+                        state.build_pipelines();
+
+                        state.build_passes(self.resources.clone());
                 }
         }
 
@@ -726,6 +679,7 @@ impl ApplicationHandler<EngineState> for Engine
                 };
 
                 state.gui
+                        .renderer
                         .handle_input(&self.window.as_ref().unwrap(), &event);
 
                 match event
@@ -757,7 +711,7 @@ impl ApplicationHandler<EngineState> for Engine
 
                                                 let duration = start.elapsed();
 
-                                                let fps = 1.0 / duration.as_secs_f32();
+                                                let _fps = 1.0 / duration.as_secs_f32();
 
                                                 /*
                                                 log::info!(
@@ -893,7 +847,6 @@ impl EngineBuilder
                                 time: None,
                                 camera: None,
                                 input: None,
-                                ui: None,
                                 window: None,
                         },
                 }
@@ -921,7 +874,7 @@ impl EngineBuilder
         pub fn with_toggle(
                 mut self,
                 key_code: KeyCode,
-        ) -> anyhow::Result<Self>
+        ) -> Result<Self>
         {
                 if !self.engine.enable_debug
                 {
@@ -953,16 +906,6 @@ impl EngineBuilder
                 self
         }
 
-        /// Set the UI system
-        pub fn with_ui(
-                mut self,
-                ui: crate::ui::UiSystem,
-        ) -> Self
-        {
-                self.engine.ui = Some(ui);
-                self
-        }
-
         /// Finally builds the [`Engine`].
         ///
         /// Does some field validation.
@@ -975,7 +918,7 @@ impl EngineBuilder
         ///
         /// See [`EngineBuilder`] for important notes on deferred
         /// initialization.
-        pub fn build(self) -> anyhow::Result<Engine>
+        pub fn build(self) -> Result<Engine>
         {
                 Ok(self.engine)
         }
@@ -994,7 +937,7 @@ impl EngineBuilder
         fn surface<'a>(
                 instance: &wgpu::Instance,
                 window: Arc<Window>,
-        ) -> anyhow::Result<wgpu::Surface<'a>, wgpu::CreateSurfaceError>
+        ) -> Result<wgpu::Surface<'a>, wgpu::CreateSurfaceError>
         {
                 instance.create_surface(window)
         }
@@ -1002,7 +945,7 @@ impl EngineBuilder
         async fn adapter(
                 instance: &wgpu::Instance,
                 window: Arc<Window>,
-        ) -> anyhow::Result<wgpu::Adapter>
+        ) -> Result<wgpu::Adapter>
         {
                 let surface = Self::surface(instance, window)?;
 
@@ -1032,7 +975,7 @@ impl EngineBuilder
 
         pub async fn device_queue(
                 adapter: &wgpu::Adapter
-        ) -> anyhow::Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>
+        ) -> Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>
         {
                 let supported = adapter.features();
 
@@ -1074,49 +1017,5 @@ impl EngineBuilder
                         trace: wgpu::Trace::Off,
                 })
                 .await
-        }
-
-        fn texture_format(surface_caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat
-        {
-                surface_caps
-                        .formats
-                        .iter()
-                        .find(|f| f.is_srgb())
-                        .copied()
-                        .unwrap_or(surface_caps.formats[0])
-        }
-
-        fn surface_configuration(
-                surface_format: wgpu::TextureFormat,
-                size: &winit::dpi::PhysicalSize<u32>,
-                surface_caps: &wgpu::SurfaceCapabilities,
-        ) -> wgpu::SurfaceConfiguration
-        {
-                wgpu::SurfaceConfiguration {
-                        // Describes how SurfaceTextures will be used.
-                        // RENDER_ATTACHMET is guaranteed to be supported.
-                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-
-                        format: surface_format,
-
-                        width: size.width,
-
-                        height: size.height,
-
-                        #[cfg(target_arch = "wasm32")]
-                        present_mode: surface_caps.present_modes[0],
-
-                        // IMMEDIATE: No VSync for non wasm
-                        // environments, because wasm only has 1
-                        // present mode.
-                        #[cfg(not(target_arch = "wasm32"))]
-                        present_mode: PresentMode::Immediate,
-
-                        alpha_mode: surface_caps.alpha_modes[0],
-
-                        view_formats: vec![],
-
-                        desired_maximum_frame_latency: 2,
-                }
         }
 }

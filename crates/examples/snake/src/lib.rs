@@ -4,12 +4,6 @@ use oxide::geometry::mesh::{Mesh, Primitive};
 use oxide_macro::oxide_main;
 use winit::keyboard::KeyCode;
 
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::UnwrapThrowExt;
-
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-
 #[oxide_main]
 pub fn run() -> anyhow::Result<()>
 {
