@@ -1,5 +1,5 @@
 use cgmath::Vector3;
-use oxide::engine::{EngineBuilder, EngineRunner};
+use oxide::engine::{Engine, EngineBuilder, EngineRunner};
 use oxide::geometry::mesh::{Mesh, Primitive};
 use oxide_macro::oxide_main;
 use winit::keyboard::KeyCode;
@@ -15,7 +15,7 @@ pub fn run() -> anyhow::Result<()>
 {
         oxide::utils::bootstrap::show_start_message();
 
-        let mut engine = EngineBuilder::new()
+        let mut engine: Engine = EngineBuilder::new()
                 .with_debug_ui()
                 .with_toggle(KeyCode::Tab)?
                 .build()?;

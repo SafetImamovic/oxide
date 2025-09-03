@@ -73,7 +73,6 @@ impl PipelineManager
                 device: &wgpu::Device,
                 config: &wgpu::SurfaceConfiguration,
                 bind_groups: &[&wgpu::BindGroupLayout],
-                _depth_texture: &crate::texture::Texture,
                 fill_mode: &FillMode,
         ) -> wgpu::RenderPipeline
         {

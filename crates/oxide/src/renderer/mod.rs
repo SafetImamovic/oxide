@@ -6,6 +6,7 @@ pub mod pipeline;
 pub mod renderer;
 pub mod resource;
 pub mod shader;
+pub mod surface;
 
 /// The RenderContext manages all rendering operations and resources.
 #[derive(Debug)]

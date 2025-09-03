@@ -32,6 +32,7 @@ use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
 use crate::renderer::pipeline::PipelineKind;
+use crate::renderer::surface::SurfaceManager;
 use crate::ui::renderer::GuiRenderer;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use winit::event::ElementState;
@@ -133,6 +134,7 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
+        /// Manages all of the defined keybinds and behaviour.
         pub input_manager: InputManager,
 
         pub ui_scale: f32,
@@ -195,7 +197,7 @@ impl Engine
                 };
 
                 // The _resize() method is called and sets this flag to true
-                if !state.is_surface_configured
+                if !state.surface_manager.is_surface_configured
                 {
                         return Ok(());
                 }
@@ -209,13 +211,13 @@ impl Engine
                 // texture. Then SurfaceTexture::present needs to be called.
                 //
                 // ```rust
-                //         state.queue.submit(std::iter::once(encoder.finish())); // oxide::EngineState
-                //         output.present(); // wgpu::SurfaceTexture
+                // state.queue.submit(std::iter::once(encoder.finish())); // oxide::EngineState
+                // output.present(); // wgpu::SurfaceTexture
                 // ```
                 //
                 // If a SurfaceTexture referencing this surface is alive when the swapchain is
                 // recreated, recreating the swapchain will panic
-                let output = match state.surface.get_current_texture()
+                let output = match state.surface_manager.surface.get_current_texture()
                 {
                         Ok(frame) => frame,
                         Err(wgpu::SurfaceError::Outdated) =>
@@ -253,8 +255,8 @@ impl Engine
 
                         let screen_descriptor = egui_wgpu::ScreenDescriptor {
                                 size_in_pixels: [
-                                        state.surface_configuration.width,
-                                        state.surface_configuration.height,
+                                        state.surface_manager.configuration.width,
+                                        state.surface_manager.configuration.height,
                                 ],
                                 pixels_per_point, /* inversely counteracts the
                                                    * Browser DPI */
@@ -287,7 +289,7 @@ impl Engine
                                         // Request Pipeline Rebuild
                                         state.pipeline_manager.rebuild_geometry_pipeline(
                                                 &state.device,
-                                                &state.surface_configuration,
+                                                &state.surface_manager.configuration,
                                                 self.fill_mode,
                                                 &[],
                                         );
@@ -370,13 +372,14 @@ impl Engine
                 //log::info!("Resizing surface -> width: {}, height: {}", final_width,
                 // final_height);
 
-                state.surface_configuration.width = final_width;
-                state.surface_configuration.height = final_height;
+                state.surface_manager.configuration.width = final_width;
+                state.surface_manager.configuration.height = final_height;
 
-                state.surface
-                        .configure(&state.device, &state.surface_configuration);
+                state.surface_manager
+                        .surface
+                        .configure(&state.device, &state.surface_manager.configuration);
 
-                state.is_surface_configured = true;
+                state.surface_manager.is_surface_configured = true;
         }
 }
 
@@ -398,10 +401,8 @@ pub struct EngineState
 {
         pub gui: GuiRenderer,
 
-        pub is_surface_configured: bool,
-
         /// The rendering surface tied to the window.
-        pub surface: wgpu::Surface<'static>,
+        pub surface_manager: SurfaceManager,
 
         /// The handle to a physical graphics device.
         pub adapter: wgpu::Adapter,
@@ -411,12 +412,6 @@ pub struct EngineState
 
         /// The GPU queue used to execute command buffers.
         pub queue: wgpu::Queue,
-
-        pub surface_configuration: wgpu::SurfaceConfiguration,
-
-        pub texture_format: wgpu::TextureFormat,
-
-        pub surface_caps: wgpu::SurfaceCapabilities,
 
         pub vertex_buffers: Vec<wgpu::Buffer>,
 
@@ -445,36 +440,21 @@ impl EngineState
 
                 Self::log_all_adapters(&instance);
 
-                let size = window.inner_size();
-
-                let surface = instance.create_surface(window.clone())?;
-
                 let adapter = EngineBuilder::adapter(&instance, window.clone()).await?;
 
                 Self::log_adapter_info(&adapter);
 
                 let (device, queue) = EngineBuilder::device_queue(&adapter).await?;
 
-                let surface_caps = surface.get_capabilities(&adapter);
-
-                let texture_format = EngineBuilder::texture_format(&surface_caps);
-
-                let surface_configuration =
-                        EngineBuilder::surface_configuration(texture_format, &size, &surface_caps);
-
-                let depth_texture = crate::texture::Texture::create_depth_texture(
-                        &device,
-                        &surface_configuration,
-                        "depth_texture",
-                );
+                let surface_manager =
+                        SurfaceManager::new(&instance, window.clone(), &adapter, &device)?;
 
                 let mut pipeline_manager = PipelineManager::new();
 
                 let geom_pipeline = PipelineManager::create_geometry_pipeline(
                         &device,
-                        &surface_configuration,
+                        &surface_manager.configuration,
                         &[],
-                        &depth_texture,
                         &FillMode::Fill,
                 );
 
@@ -523,20 +503,22 @@ impl EngineState
                 render_graph.add_pass(Box::new(bg_pass_2));
                 render_graph.add_pass(Box::new(bg_pass_3));
 
-                let gui = GuiRenderer::new(&device, surface_configuration.format, None, 1, &window);
+                let gui = GuiRenderer::new(
+                        &device,
+                        &surface_manager.configuration.format,
+                        None,
+                        1,
+                        &window,
+                );
 
                 Ok(EngineState {
                         render_graph,
-                        is_surface_configured: false,
                         pipeline_manager,
                         gui,
-                        surface,
                         adapter,
                         device,
                         queue,
-                        surface_caps,
-                        texture_format,
-                        surface_configuration,
+                        surface_manager,
                         index_buffers: vec![],
                         vertex_buffers: vec![],
                 })
