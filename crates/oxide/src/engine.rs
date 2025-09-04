@@ -26,6 +26,7 @@ use winit::platform::web::EventLoopExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+use crate::config::Config;
 use crate::input::manager::InputManager;
 use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::GeometryPass;
@@ -35,6 +36,7 @@ use crate::renderer::surface::SurfaceManager;
 use crate::ui::UiSystem;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use winit::event::ElementState;
 use winit::window::Window;
 use winit::{
@@ -99,7 +101,6 @@ impl EngineRunner
                 #[cfg(target_arch = "wasm32")]
                 {
                         let engine = Box::leak(Box::new(engine));
-
                         self.event_loop.spawn_app(engine);
                 }
 
@@ -110,7 +111,7 @@ impl EngineRunner
         }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize)]
 pub enum FillMode
 {
         Fill = 0,
@@ -137,14 +138,7 @@ pub struct Engine
         /// Manages all the defined keybinds and behavior.
         pub input_manager: InputManager,
 
-        pub ui_scale: f32,
-
-        /// Polygon fill mode, depends on the platforms wgpu features.
-        pub fill_mode: FillMode,
-
-        pub enable_debug: bool,
-
-        pub debug_toggle_key: Option<KeyCode>,
+        pub config: Config,
 
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
@@ -187,17 +181,11 @@ impl Engine
                 state.render_graph
                         .execute(&frame, &mut encoder, &state.pipeline_manager);
 
-                log::info!(
-                        "enable_debug: {:?}, debug_toggle_key: {:?},",
-                        self.enable_debug,
-                        self.debug_toggle_key
-                );
-
-                if self.enable_debug
+                if self.config.enable_debug
                 {
                         state.show_debug_window(
                                 window.clone(),
-                                &mut self.fill_mode,
+                                &mut self.config.fill_mode,
                                 &frame,
                                 &mut encoder,
                         );
@@ -212,7 +200,6 @@ impl Engine
         {
                 #[cfg(target_arch = "wasm32")]
                 {
-                        log::info!("fn resize() -> GOT HERE: Resizing...");
                         let (width, height) = Self::get_body_size().unwrap();
                         self._resize(width, height);
                 }
@@ -237,8 +224,6 @@ impl Engine
 
                 let height = body.client_height() as u32;
 
-                log::info!("Body: {}, {}", width, height);
-
                 Some((width, height))
         }
 
@@ -255,7 +240,6 @@ impl Engine
         {
                 if width == 0 || height == 0
                 {
-                        log::info!("Window size is 0, skipping resize.");
                         return;
                 }
 
@@ -446,8 +430,6 @@ impl EngineState
         )
         {
                 let pixels_per_point = self.gui.ui_scale;
-
-                log::info!("configuration:{ :? } ", self.surface_manager.configuration);
 
                 let screen_descriptor = egui_wgpu::ScreenDescriptor {
                         size_in_pixels: [
@@ -686,7 +668,6 @@ impl ApplicationHandler<EngineState> for Engine
                 {
                         WindowEvent::CloseRequested =>
                         {
-                                println!("The close button was pressed; stopping");
                                 event_loop.exit();
                         }
                         WindowEvent::Resized(_size) =>
@@ -739,7 +720,6 @@ impl ApplicationHandler<EngineState> for Engine
                         {
                                 let res = &mut self.resources.lock().unwrap();
 
-                                log::info!("CALLED --- Key: {:?}, State: {:?}", code, key_state);
                                 self.input_manager.handle_event(code, key_state, res);
 
                                 res.upload_all(&state.device);
@@ -749,15 +729,17 @@ impl ApplicationHandler<EngineState> for Engine
                                         event_loop.exit();
                                 }
 
-                                match self.debug_toggle_key
+                                match self.config.debug_toggle_key
                                 {
                                         None =>
                                         {}
                                         Some(k) =>
                                         {
-                                                if code == k && key_state == ElementState::Pressed
+                                                if code as u32 == k
+                                                        && key_state == ElementState::Pressed
                                                 {
-                                                        self.enable_debug = !self.enable_debug;
+                                                        self.config.enable_debug =
+                                                                !self.config.enable_debug;
                                                 }
                                         }
                                 }
@@ -833,16 +815,15 @@ impl EngineBuilder
         {
                 let resources = Arc::new(Mutex::new(Resources::new()));
 
+                let config = Config::new();
+
                 Self {
                         engine: Engine {
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
-                                enable_debug: false,
                                 input_manager: InputManager::new(),
-                                debug_toggle_key: None,
                                 resources,
-                                fill_mode: FillMode::Fill,
-                                ui_scale: 1.5,
+                                config,
                                 state: None,
                                 time: None,
                                 camera: None,
@@ -867,7 +848,7 @@ impl EngineBuilder
         /// Render a Debug GUI using `egui`.
         pub fn with_debug_ui(mut self) -> Self
         {
-                self.engine.enable_debug = true;
+                self.engine.config.enable_debug = true;
                 self
         }
 
@@ -876,12 +857,12 @@ impl EngineBuilder
                 key_code: KeyCode,
         ) -> Result<Self>
         {
-                if !self.engine.enable_debug
+                if !self.engine.config.enable_debug
                 {
                         anyhow::bail!("with_toggle: Debug UI must be enabled first");
                 }
 
-                self.engine.debug_toggle_key = Some(key_code);
+                self.engine.config.debug_toggle_key = Some(key_code as u32);
 
                 Ok(self)
         }
