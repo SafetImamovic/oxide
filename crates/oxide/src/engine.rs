@@ -38,6 +38,7 @@ use crate::ui::UiSystem;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use winit::dpi::PhysicalSize;
 use winit::event::{ElementState, Event};
 use winit::event_loop::ControlFlow;
 use winit::window::Window;
@@ -261,6 +262,10 @@ impl Engine
                         .surface
                         .configure(&state.device, &state.surface_manager.configuration);
 
+                let aspect = final_width as f32 / final_height as f32;
+
+                state.camera.core.aspect = aspect;
+
                 state.surface_manager.is_surface_configured = true;
         }
 }
@@ -395,16 +400,12 @@ impl EngineState
 
         pub fn build_pipelines(&mut self)
         {
-                let geom_pipeline = PipelineManager::create_geometry_pipeline(
+                let geom_pipeline = self.pipeline_manager.build_geometry_pipeline(
                         &self.device,
                         &self.surface_manager.configuration,
                         &[&self.camera.get_bind_group_layout(&self.device)],
                         &FillMode::Fill,
                 );
-
-                self.pipeline_manager
-                        .render_pipelines
-                        .insert(PipelineKind::Geometry, geom_pipeline);
         }
 
         pub fn build_passes(
@@ -502,11 +503,11 @@ impl EngineState
                                 log::info!("Fill Mode: {:?}", temp_fill_mode);
 
                                 // Request Pipeline Rebuild
-                                self.pipeline_manager.rebuild_geometry_pipeline(
+                                self.pipeline_manager.build_geometry_pipeline(
                                         &self.device,
                                         &self.surface_manager.configuration,
-                                        temp_fill_mode,
                                         &[&self.camera.get_bind_group_layout(&self.device)],
+                                        &temp_fill_mode,
                                 );
                         }
 
