@@ -38,13 +38,14 @@ impl RenderGraph
                 view: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
                 pipeline_manager: &PipelineManager,
+                camera: &wgpu::BindGroup,
         )
         {
                 for pass in self.passes.iter_mut()
                 {
                         if pass.enabled()
                         {
-                                pass.record(&view, encoder, &pipeline_manager);
+                                pass.record(&view, encoder, &camera, &pipeline_manager);
                         }
                 }
         }
@@ -79,6 +80,7 @@ pub trait RenderPass
                 &mut self,
                 view: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
+                camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
         );
 }
@@ -164,6 +166,7 @@ impl RenderPass for BackgroundPass
                 &mut self,
                 view: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
+                camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
         )
         {
@@ -249,6 +252,7 @@ impl RenderPass for GeometryPass
                 &mut self,
                 view: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
+                camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
         )
         {
@@ -268,6 +272,8 @@ impl RenderPass for GeometryPass
                 });
 
                 render_pass.set_pipeline(pipeline_manager.get(PipelineKind::Geometry));
+
+                render_pass.set_bind_group(0, camera, &[]);
 
                 let resources = self.resources.lock().unwrap();
 

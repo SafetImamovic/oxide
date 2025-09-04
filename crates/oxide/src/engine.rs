@@ -26,6 +26,7 @@ use winit::platform::web::EventLoopExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+use crate::camera::{Camera, CameraController, CameraCore, CameraUniform};
 use crate::config::Config;
 use crate::input::manager::InputManager;
 use crate::renderer::graph::BackgroundPass;
@@ -155,9 +156,6 @@ pub struct Engine
 
         pub resources: Arc<Mutex<Resources>>,
 
-        /// The main camera used to view the scene.
-        pub camera: Option<crate::renderer::camera::Camera>,
-
         // --- Misc ---
         /// Input system state (keyboard, mouse, gamepad, etc.).
         pub input: Option<crate::input::InputState>,
@@ -180,8 +178,12 @@ impl Engine
                         state.surface_manager.acquire_frame(&state.device)?
                 else { return Ok(()); };
 
-                state.render_graph
-                        .execute(&frame, &mut encoder, &state.pipeline_manager);
+                state.render_graph.execute(
+                        &frame,
+                        &mut encoder,
+                        &state.pipeline_manager,
+                        &state.camera.get_bind_group(&state.device),
+                );
 
                 if self.config.enable_debug
                 {
@@ -293,6 +295,8 @@ pub struct EngineState
         /// The GPU queue used to execute command buffers.
         pub queue: wgpu::Queue,
 
+        pub camera: Camera,
+
         pub vertex_buffers: Vec<wgpu::Buffer>,
 
         pub index_buffers: Vec<wgpu::Buffer>,
@@ -345,8 +349,33 @@ impl EngineState
                         &window,
                 );
 
+                let camera_core = CameraCore {
+                        // position the camera 1 unit up and 2 units back
+                        // +z is out of the screen
+                        eye: (0.0, 1.0, 2.0).into(),
+                        // have it look at the origin
+                        target: (0.0, 0.0, 0.0).into(),
+                        // which way is "up"
+                        up: cgmath::Vector3::unit_y(),
+                        aspect: 1.0,
+                        fovy: 45.0,
+                        znear: 0.1,
+                        zfar: 100.0,
+                };
+
+                let mut camera_uniform = CameraUniform::new();
+
+                let camera_controller = CameraController::new(0.01);
+
+                let camera = Camera {
+                        uniform: camera_uniform,
+                        core: camera_core,
+                        controller: camera_controller,
+                };
+
                 Ok(EngineState {
                         instance,
+                        camera,
                         render_graph,
                         pipeline_manager,
                         adapter,
@@ -359,12 +388,17 @@ impl EngineState
                 })
         }
 
+        pub fn update(&mut self)
+        {
+                self.camera.update(&self.device, &self.queue);
+        }
+
         pub fn build_pipelines(&mut self)
         {
                 let geom_pipeline = PipelineManager::create_geometry_pipeline(
                         &self.device,
                         &self.surface_manager.configuration,
-                        &[],
+                        &[&self.camera.get_bind_group_layout(&self.device)],
                         &FillMode::Fill,
                 );
 
@@ -472,7 +506,7 @@ impl EngineState
                                         &self.device,
                                         &self.surface_manager.configuration,
                                         temp_fill_mode,
-                                        &[],
+                                        &[&self.camera.get_bind_group_layout(&self.device)],
                                 );
                         }
 
@@ -666,6 +700,8 @@ impl ApplicationHandler<EngineState> for Engine
                         .renderer
                         .handle_input(&self.window.as_ref().unwrap(), &event);
 
+                state.camera.controller.process_events(&event);
+
                 match event
                 {
                         WindowEvent::CloseRequested =>
@@ -678,6 +714,7 @@ impl ApplicationHandler<EngineState> for Engine
                         }
                         WindowEvent::RedrawRequested =>
                         {
+                                state.update();
                                 let start = instant::Instant::now();
 
                                 match self.render()
@@ -720,11 +757,11 @@ impl ApplicationHandler<EngineState> for Engine
                                 ..
                         } =>
                         {
-                                let res = &mut self.resources.lock().unwrap();
+                                //let res = &mut self.resources.lock().unwrap();
 
-                                self.input_manager.handle_event(code, key_state, res);
+                                //self.input_manager.handle_event(code, key_state, res);
 
-                                res.upload_all(&state.device);
+                                //res.upload_all(&state.device);
 
                                 if code == KeyCode::Escape
                                 {
@@ -828,7 +865,6 @@ impl EngineBuilder
                                 config,
                                 state: None,
                                 time: None,
-                                camera: None,
                                 input: None,
                                 window: None,
                         },
