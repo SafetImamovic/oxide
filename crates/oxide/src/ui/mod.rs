@@ -30,7 +30,7 @@ impl UiSystem
                 );
 
                 Self {
-                        ui_scale: 1.5,
+                        ui_scale: 1.2,
                         renderer,
                 }
         }

@@ -81,7 +81,7 @@ impl Camera
                                                         ui.label("FOV Y");
                                                         ui.add(egui::Slider::new(
                                                                 &mut self.config.fovy.0,
-                                                                0.0..=179.0,
+                                                                1.0..=179.0,
                                                         ));
                                                         ui.end_row();
 
@@ -97,10 +97,10 @@ impl Camera
 
                                 ui.group(|ui| {
                                         egui::Grid::new("transform_grid")
-                                                .num_columns(5)
+                                                .num_columns(3) // Label | Reset/empty | Value
                                                 .spacing([12.0, 4.0])
                                                 .show(ui, |ui| {
-                                                        // Position
+                                                        // --- Position ---
                                                         ui.label("Position");
                                                         if ui.button("Reset").clicked()
                                                         {
@@ -109,31 +109,43 @@ impl Camera
                                                                                 0.0, 0.0, 0.0,
                                                                         );
                                                         }
-                                                        ui.label("X");
+                                                        ui.end_row();
+
+                                                        ui.label("  X");
+                                                        ui.label(""); // keep grid alignment
                                                         ui.add(egui::DragValue::new(
                                                                 &mut self.core.position.x,
                                                         )
                                                         .speed(0.1));
-                                                        ui.label("Y");
+                                                        ui.end_row();
+
+                                                        ui.label("  Y");
+                                                        ui.label("");
                                                         ui.add(egui::DragValue::new(
                                                                 &mut self.core.position.y,
                                                         )
                                                         .speed(0.1));
-                                                        ui.label("Z");
+                                                        ui.end_row();
+
+                                                        ui.label("  Z");
+                                                        ui.label("");
                                                         ui.add(egui::DragValue::new(
                                                                 &mut self.core.position.z,
                                                         )
                                                         .speed(0.1));
                                                         ui.end_row();
 
-                                                        // Rotation
+                                                        // --- Rotation ---
                                                         ui.label("Rotation");
                                                         if ui.button("Reset").clicked()
                                                         {
                                                                 self.core.yaw = Rad(0.0);
                                                                 self.core.pitch = Rad(0.0);
                                                         }
-                                                        ui.label("Yaw");
+                                                        ui.end_row();
+
+                                                        ui.label("  Yaw");
+                                                        ui.label("");
                                                         let mut yaw_deg =
                                                                 self.core.yaw.0.to_degrees();
                                                         if ui.add(egui::DragValue::new(
@@ -146,7 +158,10 @@ impl Camera
                                                                         cgmath::Deg(yaw_deg),
                                                                 );
                                                         }
-                                                        ui.label("Pitch");
+                                                        ui.end_row();
+
+                                                        ui.label("  Pitch");
+                                                        ui.label("");
                                                         let mut pitch_deg =
                                                                 self.core.pitch.0.to_degrees();
                                                         if ui.add(egui::DragValue::new(

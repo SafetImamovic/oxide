@@ -205,7 +205,7 @@ impl GuiRenderer
 
                 if self.show_right_panel
                 {
-                        egui::SidePanel::right("Right Panel").resizable(true).show(self.context(), |ui| {
+                        egui::SidePanel::right("Right Panel").resizable(true).default_width(400.0).show(self.context(), |ui| {
                                 egui::ScrollArea::new(true).show(ui, |ui| {
                                         // UI scale controls
                                         ui.horizontal(|ui| {
@@ -256,7 +256,7 @@ impl GuiRenderer
 
                                         // Collapsible section for passes
                                         egui::CollapsingHeader::new("Render Pass Graph")
-                                            .default_open(false)
+                                            .default_open(true)
                                             .show(ui, |ui| {
                                                     let len = graph.passes.len();
                                                     let mut move_req: Option<(usize, isize)> = None;
