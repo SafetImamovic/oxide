@@ -157,6 +157,8 @@
 //! oxide::run().unwrap()
 //! ```
 
+pub mod camera;
+pub mod config;
 pub mod engine;
 pub mod geometry;
 pub mod input;

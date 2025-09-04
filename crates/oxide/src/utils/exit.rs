@@ -1,5 +1,7 @@
+#[cfg(not(target_arch = "wasm32"))]
 use colored::*;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::utils::random::get_random_u128;
 
 #[cfg(target_arch = "wasm32")]

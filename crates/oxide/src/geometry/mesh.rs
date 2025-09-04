@@ -110,17 +110,12 @@ impl Mesh
                         return;
                 }
 
-                log::info!("Vertex and Index buffers created for mesh::{}", self.name);
-
                 for i in self.vertices.iter_mut()
                 {
                         i.position[0] += self.direction.x;
                         i.position[1] += self.direction.y;
                         i.position[2] += self.direction.z;
                 }
-
-                log::info!("Mesh position: {:?}", self.position);
-                log::info!("Mesh vertices: {:?}", self.vertices);
 
                 self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
                         label: Some(&format!("mesh::{}::vertex_buffer", self.name)),

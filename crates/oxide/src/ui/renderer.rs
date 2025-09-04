@@ -38,7 +38,7 @@ impl GuiRenderer
 
         pub fn new(
                 device: &Device,
-                output_color_format: TextureFormat,
+                output_color_format: &TextureFormat,
                 output_depth_format: Option<TextureFormat>,
                 msaa_samples: u32,
                 window: &Window,
@@ -57,7 +57,7 @@ impl GuiRenderer
 
                 let egui_renderer = Renderer::new(
                         device,
-                        output_color_format,
+                        *output_color_format,
                         output_depth_format,
                         msaa_samples,
                         true,
