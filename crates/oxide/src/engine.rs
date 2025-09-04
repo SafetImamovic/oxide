@@ -37,7 +37,8 @@ use crate::ui::UiSystem;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use winit::event::ElementState;
+use winit::event::{ElementState, Event};
+use winit::event_loop::ControlFlow;
 use winit::window::Window;
 use winit::{
         application::ApplicationHandler,
@@ -68,6 +69,7 @@ impl EngineRunner
         pub fn new(#[allow(unused_mut)] mut engine: Engine) -> Result<Self>
         {
                 let event_loop: EventLoop<EngineState> = EventLoop::with_user_event().build()?;
+                event_loop.set_control_flow(ControlFlow::Poll);
 
                 #[cfg(target_arch = "wasm32")]
                 {
