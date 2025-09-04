@@ -69,12 +69,13 @@ impl PipelineManager
                 })
         }
 
-        pub fn create_geometry_pipeline(
+        pub fn build_geometry_pipeline(
+                &mut self,
                 device: &wgpu::Device,
                 config: &wgpu::SurfaceConfiguration,
                 bind_groups: &[&wgpu::BindGroupLayout],
                 fill_mode: &FillMode,
-        ) -> wgpu::RenderPipeline
+        )
         {
                 let polygon_mode = match fill_mode
                 {
@@ -109,7 +110,7 @@ impl PipelineManager
 
                 let vertex_buffer = Vertex::get_desc();
 
-                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                         label: Some("Geometry Pipeline"),
                         layout: Some(&render_pipeline_layout),
                         vertex: wgpu::VertexState {
@@ -141,80 +142,9 @@ impl PipelineManager
                         multisample: wgpu::MultisampleState::default(),
                         multiview: None,
                         cache: None,
-                })
-        }
-
-        pub fn rebuild_geometry_pipeline(
-                &mut self,
-                device: &wgpu::Device,
-                config: &wgpu::SurfaceConfiguration,
-                fill_mode: FillMode,
-                bind_groups: &[&wgpu::BindGroupLayout],
-        )
-        {
-                // Decide the polygon mode based on FillMode
-                let polygon_mode = match fill_mode
-                {
-                        FillMode::Fill => wgpu::PolygonMode::Fill,
-                        FillMode::Wireframe => wgpu::PolygonMode::Line,
-                        FillMode::Vertex => wgpu::PolygonMode::Point,
-                };
-
-                let shader = PipelineManager::load_shader_module(device);
-
-                let render_pipeline_layout =
-                        PipelineManager::new_render_pipeline_layout(device, bind_groups);
-
-                let vertex_buffer = Vertex::get_desc();
-
-                let pipeline: &mut wgpu::RenderPipeline = self.get_mut(PipelineKind::Geometry);
-
-                // Recreate the pipeline
-                *pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                        label: Some("Render Pipeline"),
-                        layout: Some(&render_pipeline_layout),
-                        vertex: wgpu::VertexState {
-                                module: &shader,
-                                entry_point: Some("vs_main"), // 1.
-                                buffers: &[vertex_buffer],    // 2.
-                                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        },
-                        fragment: Some(wgpu::FragmentState {
-                                // 3.
-                                module: &shader,
-                                entry_point: Some("fs_main"),
-                                targets: &[Some(wgpu::ColorTargetState {
-                                        // 4.
-                                        format: config.format,
-                                        blend: Some(wgpu::BlendState {
-                                                color: wgpu::BlendComponent::OVER,
-                                                alpha: wgpu::BlendComponent::OVER,
-                                        }),
-                                        write_mask: wgpu::ColorWrites::ALL,
-                                })],
-                                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        }),
-                        primitive: wgpu::PrimitiveState {
-                                topology: wgpu::PrimitiveTopology::TriangleList, // 1.
-                                strip_index_format: None,
-                                front_face: wgpu::FrontFace::Ccw, // 2.
-                                cull_mode: Some(wgpu::Face::Back),
-                                // Setting this to anything other than Fill requires
-                                // Features::NON_FILL_POLYGON_MODE
-                                polygon_mode,
-                                // Requires Features::DEPTH_CLIP_CONTROL
-                                // Requires Features::CONSERVATIVE_RASTERIZATION
-                                conservative: false,
-                                unclipped_depth: false,
-                        },
-                        depth_stencil: None, // 1.
-                        multisample: wgpu::MultisampleState {
-                                count: 1,                         // 2.
-                                mask: !0,                         // 3.
-                                alpha_to_coverage_enabled: false, // 4.
-                        },
-                        multiview: None, // 5.
-                        cache: None,     // 6.
                 });
+
+                self.render_pipelines
+                        .insert(PipelineKind::Geometry, pipeline);
         }
 }

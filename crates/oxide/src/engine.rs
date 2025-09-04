@@ -20,6 +20,7 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
 
@@ -38,7 +39,8 @@ use crate::ui::UiSystem;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use winit::event::{ElementState, Event};
+use winit::dpi::PhysicalSize;
+use winit::event::{DeviceEvent, DeviceId, ElementState, Event};
 use winit::event_loop::ControlFlow;
 use winit::window::Window;
 use winit::{
@@ -249,6 +251,8 @@ impl Engine
 
                 let state = self.state.as_mut().unwrap();
 
+                state.camera.projection.resize(width, height);
+
                 // Clamping to max dim to prevent panic!
                 let max_dim = state.device.limits().max_texture_dimension_2d;
                 let final_width = width.min(max_dim);
@@ -260,6 +264,18 @@ impl Engine
                 state.surface_manager
                         .surface
                         .configure(&state.device, &state.surface_manager.configuration);
+
+                if state.camera.config.aspect_ratio_correction
+                {
+                        let aspect = final_width as f32 / final_height as f32;
+
+                        state.camera.projection.aspect = aspect;
+                }
+                else
+                {
+                        state.camera.projection.aspect =
+                                state.camera.config.initial_aspect.unwrap();
+                }
 
                 state.surface_manager.is_surface_configured = true;
         }
@@ -349,29 +365,7 @@ impl EngineState
                         &window,
                 );
 
-                let camera_core = CameraCore {
-                        // position the camera 1 unit up and 2 units back
-                        // +z is out of the screen
-                        eye: (0.0, 1.0, 2.0).into(),
-                        // have it look at the origin
-                        target: (0.0, 0.0, 0.0).into(),
-                        // which way is "up"
-                        up: cgmath::Vector3::unit_y(),
-                        aspect: 1.0,
-                        fovy: 45.0,
-                        znear: 0.1,
-                        zfar: 100.0,
-                };
-
-                let mut camera_uniform = CameraUniform::new();
-
-                let camera_controller = CameraController::new(0.01);
-
-                let camera = Camera {
-                        uniform: camera_uniform,
-                        core: camera_core,
-                        controller: camera_controller,
-                };
+                let camera = Camera::new(&surface_manager.configuration);
 
                 Ok(EngineState {
                         instance,
@@ -388,23 +382,22 @@ impl EngineState
                 })
         }
 
-        pub fn update(&mut self)
+        pub fn update(
+                &mut self,
+                dt: Duration,
+        )
         {
-                self.camera.update(&self.device, &self.queue);
+                self.camera.update(dt);
         }
 
         pub fn build_pipelines(&mut self)
         {
-                let geom_pipeline = PipelineManager::create_geometry_pipeline(
+                let geom_pipeline = self.pipeline_manager.build_geometry_pipeline(
                         &self.device,
                         &self.surface_manager.configuration,
                         &[&self.camera.get_bind_group_layout(&self.device)],
                         &FillMode::Fill,
                 );
-
-                self.pipeline_manager
-                        .render_pipelines
-                        .insert(PipelineKind::Geometry, geom_pipeline);
         }
 
         pub fn build_passes(
@@ -495,6 +488,7 @@ impl EngineState
                                 &mut self.gui.ui_scale,
                                 &mut temp_fill_mode,
                                 enabled_features,
+                                &mut self.camera,
                         );
 
                         if temp_fill_mode != *fill_mode
@@ -502,11 +496,11 @@ impl EngineState
                                 log::info!("Fill Mode: {:?}", temp_fill_mode);
 
                                 // Request Pipeline Rebuild
-                                self.pipeline_manager.rebuild_geometry_pipeline(
+                                self.pipeline_manager.build_geometry_pipeline(
                                         &self.device,
                                         &self.surface_manager.configuration,
-                                        temp_fill_mode,
                                         &[&self.camera.get_bind_group_layout(&self.device)],
+                                        &temp_fill_mode,
                                 );
                         }
 
@@ -654,6 +648,37 @@ impl ApplicationHandler<EngineState> for Engine
                 }
         }
 
+        fn device_event(
+                &mut self,
+                _event_loop: &ActiveEventLoop,
+                _device_id: DeviceId,
+                event: DeviceEvent,
+        )
+        {
+                let state = if let Some(state) = &mut self.state
+                {
+                        state
+                }
+                else
+                {
+                        return;
+                };
+                match event
+                {
+                        DeviceEvent::MouseMotion {
+                                delta: (dx, dy),
+                        } =>
+                        {
+                                if state.camera.locked_in
+                                {
+                                        state.camera.controller.handle_mouse(dx, dy);
+                                }
+                        }
+                        _ =>
+                        {}
+                }
+        }
+
         /// Handles custom user events.
         ///
         /// On WASM, async initialization sends the completed [`State`] via a
@@ -690,17 +715,21 @@ impl ApplicationHandler<EngineState> for Engine
                 event: WindowEvent,
         )
         {
+                let mut dt: Duration = Duration::from_secs_f32(1.0 / 60.0);
+
                 let state = match &mut self.state
                 {
                         Some(canvas) => canvas,
                         None => return,
                 };
 
+                let mut last_render_time = instant::Instant::now();
+
+                state.update(dt);
+
                 state.gui
                         .renderer
                         .handle_input(&self.window.as_ref().unwrap(), &event);
-
-                state.camera.controller.process_events(&event);
 
                 match event
                 {
@@ -714,7 +743,6 @@ impl ApplicationHandler<EngineState> for Engine
                         }
                         WindowEvent::RedrawRequested =>
                         {
-                                state.update();
                                 let start = instant::Instant::now();
 
                                 match self.render()
@@ -732,6 +760,10 @@ impl ApplicationHandler<EngineState> for Engine
                                                 let duration = start.elapsed();
 
                                                 let _fps = 1.0 / duration.as_secs_f32();
+
+                                                let now = instant::Instant::now();
+                                                dt = now - last_render_time;
+                                                last_render_time = now;
 
                                                 /*
                                                 log::info!(
@@ -757,15 +789,13 @@ impl ApplicationHandler<EngineState> for Engine
                                 ..
                         } =>
                         {
-                                //let res = &mut self.resources.lock().unwrap();
+                                state.camera
+                                        .controller
+                                        .handle_key(code, key_state.is_pressed());
 
-                                //self.input_manager.handle_event(code, key_state, res);
-
-                                //res.upload_all(&state.device);
-
-                                if code == KeyCode::Escape
+                                if code == KeyCode::Escape && key_state.is_pressed()
                                 {
-                                        event_loop.exit();
+                                        state.camera.locked_in = !state.camera.locked_in;
                                 }
 
                                 match self.config.debug_toggle_key
@@ -783,6 +813,7 @@ impl ApplicationHandler<EngineState> for Engine
                                         }
                                 }
                         }
+
                         _ => (),
                 }
         }

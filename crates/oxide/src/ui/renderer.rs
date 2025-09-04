@@ -1,3 +1,4 @@
+use crate::camera::Camera;
 use crate::engine::FillMode;
 use crate::renderer::graph::RenderGraph;
 use derivative::Derivative;
@@ -178,9 +179,10 @@ impl GuiRenderer
                 ui_scale: &mut f32,
                 fill_mode: &mut FillMode,
                 features: wgpu::Features,
+                camera: &mut Camera,
         )
         {
-                self.debug_window(graph, ui_scale, fill_mode, features);
+                self.debug_window(graph, ui_scale, fill_mode, features, camera);
         }
 
         pub fn debug_window(
@@ -189,6 +191,7 @@ impl GuiRenderer
                 ui_scale: &mut f32,
                 fill_mode: &mut FillMode,
                 features: wgpu::Features,
+                camera: &mut Camera,
         )
         {
                 let mut temp_fill_mode = *fill_mode;
@@ -202,91 +205,96 @@ impl GuiRenderer
 
                 if self.show_right_panel
                 {
-                        egui::SidePanel::right("Right Panel").show(self.context(), |ui| {
-                                // UI scale controls
-                                ui.horizontal(|ui| {
-                                        if ui.button(egui::RichText::new("[   -   ]").strong().text_style(egui::TextStyle::Monospace))
-                                                .clicked()
-                                        {
-                                                scale = (scale - 0.1).max(0.5);
-                                        }
-                                        if ui.button(egui::RichText::new("[   +   ]").strong().text_style(egui::TextStyle::Monospace))
-                                                .clicked()
-                                        {
-                                                scale = (scale + 0.1).min(3.0);
-                                        }
-                                        ui.label(format!("UI Scale: {:.1}", scale));
+                        egui::SidePanel::right("Right Panel").resizable(true).default_width(400.0).show(self.context(), |ui| {
+                                egui::ScrollArea::new(true).show(ui, |ui| {
+                                        // UI scale controls
+                                        ui.horizontal(|ui| {
+                                                if ui.button(egui::RichText::new("[   -   ]").strong().text_style(egui::TextStyle::Monospace))
+                                                    .clicked()
+                                                {
+                                                        scale = (scale - 0.1).max(0.5);
+                                                }
+                                                if ui.button(egui::RichText::new("[   +   ]").strong().text_style(egui::TextStyle::Monospace))
+                                                    .clicked()
+                                                {
+                                                        scale = (scale + 0.1).min(3.0);
+                                                }
+                                                ui.label(format!("UI Scale: {:.1}", scale));
+                                        });
+
+                                        // Fill mode
+                                        egui::ComboBox::from_label("Fill Mode")
+                                            .selected_text(format!("{:?}", temp_fill_mode))
+                                            .show_ui(ui, |ui| {
+                                                    ui.selectable_value(
+                                                            &mut temp_fill_mode,
+                                                            FillMode::Fill,
+                                                            "Fill",
+                                                    );
+                                                    if features
+                                                        .contains(wgpu::Features::POLYGON_MODE_LINE)
+                                                    {
+                                                            ui.selectable_value(
+                                                                    &mut temp_fill_mode,
+                                                                    FillMode::Wireframe,
+                                                                    "Wireframe",
+                                                            );
+                                                    }
+                                                    if features.contains(
+                                                            wgpu::Features::POLYGON_MODE_POINT,
+                                                    )
+                                                    {
+                                                            ui.selectable_value(
+                                                                    &mut temp_fill_mode,
+                                                                    FillMode::Vertex,
+                                                                    "Vertex",
+                                                            );
+                                                    }
+                                            });
+
+                                        camera.ui(ui);
+
+                                        // Collapsible section for passes
+                                        egui::CollapsingHeader::new("Render Pass Graph")
+                                            .default_open(true)
+                                            .show(ui, |ui| {
+                                                    let len = graph.passes.len();
+                                                    let mut move_req: Option<(usize, isize)> = None;
+
+                                                    for (i, pass) in graph.passes.iter_mut().enumerate()
+                                                    {
+                                                            let mut enabled = pass.enabled();
+
+                                                            ui.horizontal(|ui| {
+                                                                    pass.ui(ui);
+
+                                                                    ui.with_layout(
+                                                                            egui::Layout::right_to_left(egui::Align::Center),
+                                                                            |ui| {
+                                                                                    ui.checkbox(&mut enabled, "Enabled");
+
+                                                                                    if ui.button(egui::RichText::new("[ v ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i + 1 < len {
+                                                                                            move_req = Some((i, 1));
+                                                                                    }
+                                                                                    if ui.button(egui::RichText::new("[ ^ ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i > 0 {
+                                                                                            move_req = Some((i, -1));
+                                                                                    }
+                                                                            },
+                                                                    );
+                                                            });
+
+                                                            ui.separator();
+                                                            pass.set_enabled(enabled);
+                                                    }
+
+                                                    if let Some((i, d)) = move_req
+                                                    {
+                                                            let j = (i as isize + d) as usize;
+                                                            graph.passes.swap(i, j);
+                                                    }
+                                            });
                                 });
 
-                                // Fill mode
-                                egui::ComboBox::from_label("Fill Mode")
-                                        .selected_text(format!("{:?}", temp_fill_mode))
-                                        .show_ui(ui, |ui| {
-                                                ui.selectable_value(
-                                                        &mut temp_fill_mode,
-                                                        FillMode::Fill,
-                                                        "Fill",
-                                                );
-                                                if features
-                                                        .contains(wgpu::Features::POLYGON_MODE_LINE)
-                                                {
-                                                        ui.selectable_value(
-                                                                &mut temp_fill_mode,
-                                                                FillMode::Wireframe,
-                                                                "Wireframe",
-                                                        );
-                                                }
-                                                if features.contains(
-                                                        wgpu::Features::POLYGON_MODE_POINT,
-                                                )
-                                                {
-                                                        ui.selectable_value(
-                                                                &mut temp_fill_mode,
-                                                                FillMode::Vertex,
-                                                                "Vertex",
-                                                        );
-                                                }
-                                        });
-
-                                // Collapsible section for passes
-                                egui::CollapsingHeader::new("Render Pass Graph")
-                                        .default_open(false)
-                                        .show(ui, |ui| {
-                                                let len = graph.passes.len();
-                                                let mut move_req: Option<(usize, isize)> = None;
-
-                                                for (i, pass) in graph.passes.iter_mut().enumerate()
-                                                {
-                                                        let mut enabled = pass.enabled();
-
-                                                        ui.horizontal(|ui| {
-                                                                pass.ui(ui);
-
-                                                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        ui.checkbox(&mut enabled, "Enabled");
-
-                                        if ui.button(egui::RichText::new("[ v ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i + 1 < len {
-                                            move_req = Some((i, 1));
-                                        }
-                                        if ui.button(egui::RichText::new("[ ^ ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i > 0 {
-                                            move_req = Some((i, -1));
-                                        }
-                                    },
-                                );
-                                                        });
-
-                                                        ui.separator();
-                                                        pass.set_enabled(enabled);
-                                                }
-
-                                                if let Some((i, d)) = move_req
-                                                {
-                                                        let j = (i as isize + d) as usize;
-                                                        graph.passes.swap(i, j);
-                                                }
-                                        });
                         });
                 }
 
