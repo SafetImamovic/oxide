@@ -1,11 +1,13 @@
 use crate::camera::Camera;
 use crate::engine::FillMode;
 use crate::renderer::graph::RenderGraph;
+use crate::ui::MovementUiConfig;
 use derivative::Derivative;
-use egui::Context;
+use egui::{Context, FontData, FontDefinitions, FontFamily, Id};
 use egui_wgpu::Renderer;
 use egui_wgpu::ScreenDescriptor;
 use egui_winit::State;
+use std::time::Duration;
 use wgpu::CommandEncoder;
 use wgpu::Device;
 use wgpu::Queue;
@@ -46,6 +48,29 @@ impl GuiRenderer
         ) -> GuiRenderer
         {
                 let egui_context = Context::default();
+
+                let mut fonts = FontDefinitions::default();
+
+                fonts.font_data.insert(
+                        "0xProto".to_owned(),
+                        std::sync::Arc::new(FontData::from_static(include_bytes!(
+                                "0xProtoNerdFontMono-Regular.ttf"
+                        ))),
+                );
+
+                // Put my font first (highest priority):
+                fonts.families
+                        .get_mut(&FontFamily::Proportional)
+                        .unwrap()
+                        .insert(0, "0xProto".to_owned());
+
+                // Put my font as last fallback for monospace:
+                fonts.families
+                        .get_mut(&FontFamily::Monospace)
+                        .unwrap()
+                        .push("0xProto".to_owned());
+
+                egui_context.set_fonts(fonts);
 
                 let egui_state = State::new(
                         egui_context,
@@ -180,9 +205,10 @@ impl GuiRenderer
                 fill_mode: &mut FillMode,
                 features: wgpu::Features,
                 camera: &mut Camera,
+                dt: &Duration,
         )
         {
-                self.debug_window(graph, ui_scale, fill_mode, features, camera);
+                self.debug_window(graph, ui_scale, fill_mode, features, camera, &dt);
         }
 
         pub fn debug_window(
@@ -192,15 +218,25 @@ impl GuiRenderer
                 fill_mode: &mut FillMode,
                 features: wgpu::Features,
                 camera: &mut Camera,
+                dt: &Duration,
         )
         {
                 let mut temp_fill_mode = *fill_mode;
                 let mut scale: f32 = *ui_scale;
 
                 egui::Area::new("nice".into())
-                        .fixed_pos(egui::pos2(10.0, 10.0))
+                        .fixed_pos(egui::pos2(10.0, 00.0))
                         .show(self.context(), |ui| {
                                 ui.label("Press [Tab] to toggle right menu");
+                        });
+
+                egui::Window::new("Stats")
+                        .anchor(egui::Align2::LEFT_TOP, egui::Vec2::ZERO)
+                        .fixed_pos(egui::pos2(10.0, 20.0))
+                        .default_width(200.0)
+                        .show(self.context(), |ui| {
+                                ui.label(format!("FPS: {}", 1.0 / dt.as_secs_f32()));
+                                ui.label(format!("μs: {}", dt.as_micros()));
                         });
 
                 if self.show_right_panel
@@ -273,10 +309,10 @@ impl GuiRenderer
                                                                             |ui| {
                                                                                     ui.checkbox(&mut enabled, "Enabled");
 
-                                                                                    if ui.button(egui::RichText::new("[ v ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i + 1 < len {
+                                                                                    if ui.button(egui::RichText::new("[ ↓ ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i + 1 < len {
                                                                                             move_req = Some((i, 1));
                                                                                     }
-                                                                                    if ui.button(egui::RichText::new("[ ^ ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i > 0 {
+                                                                                    if ui.button(egui::RichText::new("[ ↑ ]").strong().text_style(egui::TextStyle::Monospace)).clicked() && i > 0 {
                                                                                             move_req = Some((i, -1));
                                                                                     }
                                                                             },
@@ -297,6 +333,15 @@ impl GuiRenderer
 
                         });
                 }
+
+                let mvmnt_cfg = MovementUiConfig::default();
+
+                crate::ui::show_movement_controls(
+                        self.context(),
+                        Id::new(0),
+                        &mvmnt_cfg,
+                        &mut camera.controller,
+                );
 
                 *ui_scale = scale;
                 if *fill_mode != temp_fill_mode

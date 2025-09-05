@@ -27,20 +27,18 @@ use winit::platform::web::EventLoopExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::camera::{Camera, CameraController, CameraCore, CameraUniform};
+use crate::camera::Camera;
 use crate::config::Config;
 use crate::input::manager::InputManager;
 use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
-use crate::renderer::pipeline::PipelineKind;
 use crate::renderer::surface::SurfaceManager;
 use crate::ui::UiSystem;
 use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use winit::dpi::PhysicalSize;
-use winit::event::{DeviceEvent, DeviceId, ElementState, Event};
+use winit::event::{DeviceEvent, DeviceId, ElementState};
 use winit::event_loop::ControlFlow;
 use winit::window::Window;
 use winit::{
@@ -140,6 +138,8 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
+        pub last_render_time: Duration,
+
         /// Manages all the defined keybinds and behavior.
         pub input_manager: InputManager,
 
@@ -197,6 +197,7 @@ impl Engine
                                 &mut self.config.fill_mode,
                                 &frame,
                                 &mut encoder,
+                                &dt,
                         );
                 }
 
@@ -371,7 +372,7 @@ impl EngineState
                         &window,
                 );
 
-                let camera = Camera::new(&surface_manager.configuration);
+                let camera = Camera::new();
 
                 Ok(EngineState {
                         instance,
@@ -398,7 +399,7 @@ impl EngineState
 
         pub fn build_pipelines(&mut self)
         {
-                let geom_pipeline = self.pipeline_manager.build_geometry_pipeline(
+                self.pipeline_manager.build_geometry_pipeline(
                         &self.device,
                         &self.surface_manager.configuration,
                         &[&self.camera.get_bind_group_layout(&self.device)],
@@ -462,6 +463,7 @@ impl EngineState
                 fill_mode: &mut FillMode,
                 frame: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
+                dt: &Duration,
         )
         {
                 let pixels_per_point = self.gui.ui_scale;
@@ -495,6 +497,7 @@ impl EngineState
                                 &mut temp_fill_mode,
                                 enabled_features,
                                 &mut self.camera,
+                                &dt,
                         );
 
                         if temp_fill_mode != *fill_mode
@@ -654,37 +657,6 @@ impl ApplicationHandler<EngineState> for Engine
                 }
         }
 
-        fn device_event(
-                &mut self,
-                _event_loop: &ActiveEventLoop,
-                _device_id: DeviceId,
-                event: DeviceEvent,
-        )
-        {
-                let state = if let Some(state) = &mut self.state
-                {
-                        state
-                }
-                else
-                {
-                        return;
-                };
-                match event
-                {
-                        DeviceEvent::MouseMotion {
-                                delta: (dx, dy),
-                        } =>
-                        {
-                                if state.camera.locked_in
-                                {
-                                        state.camera.controller.handle_mouse(dx, dy);
-                                }
-                        }
-                        _ =>
-                        {}
-                }
-        }
-
         /// Handles custom user events.
         ///
         /// On WASM, async initialization sends the completed [`State`] via a
@@ -721,19 +693,17 @@ impl ApplicationHandler<EngineState> for Engine
                 event: WindowEvent,
         )
         {
-                let mut dt: Duration = Duration::from_secs_f32(1.0 / 60.0);
-
                 let state = match &mut self.state
                 {
                         Some(canvas) => canvas,
                         None => return,
                 };
 
-                let mut last_render_time = instant::Instant::now();
-
                 state.gui
                         .renderer
                         .handle_input(&self.window.as_ref().unwrap(), &event);
+
+                let last = self.last_render_time;
 
                 match event
                 {
@@ -747,9 +717,9 @@ impl ApplicationHandler<EngineState> for Engine
                         }
                         WindowEvent::RedrawRequested =>
                         {
-                                let start = instant::Instant::now();
+                                let last_render_time = instant::Instant::now();
 
-                                match self.render(&dt)
+                                match self.render(&last)
                                 {
                                         Ok(_) =>
                                         {
@@ -763,11 +733,9 @@ impl ApplicationHandler<EngineState> for Engine
 
                                                 let now = instant::Instant::now();
 
-                                                dt = now - last_render_time;
+                                                self.last_render_time = now - last_render_time;
 
-                                                log::info!("dt: {:?}", dt);
-
-                                                last_render_time = now;
+                                                log::info!("FPS: {:?}", self.last_render_time);
                                         }
                                         Err(e) =>
                                         {
@@ -811,6 +779,37 @@ impl ApplicationHandler<EngineState> for Engine
                         }
 
                         _ => (),
+                }
+        }
+
+        fn device_event(
+                &mut self,
+                _event_loop: &ActiveEventLoop,
+                _device_id: DeviceId,
+                event: DeviceEvent,
+        )
+        {
+                let state = if let Some(state) = &mut self.state
+                {
+                        state
+                }
+                else
+                {
+                        return;
+                };
+                match event
+                {
+                        DeviceEvent::MouseMotion {
+                                delta: (dx, dy),
+                        } =>
+                        {
+                                if state.camera.locked_in
+                                {
+                                        state.camera.controller.handle_mouse(dx, dy);
+                                }
+                        }
+                        _ =>
+                        {}
                 }
         }
 }
@@ -888,6 +887,7 @@ impl EngineBuilder
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 input_manager: InputManager::new(),
+                                last_render_time: Duration::from_secs_f32(0.0),
                                 resources,
                                 config,
                                 state: None,

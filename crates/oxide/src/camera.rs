@@ -1,11 +1,7 @@
-use cgmath::num_traits::Float;
 use cgmath::*;
-use egui::DragValue;
-use serde::{Deserialize, Serialize};
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
 use wgpu::util::DeviceExt;
-use wgpu::SurfaceConfiguration;
 use winit::dpi::PhysicalPosition;
 use winit::event::*;
 use winit::keyboard::KeyCode;
@@ -105,9 +101,7 @@ impl Camera
                                                         if ui.button("Reset").clicked()
                                                         {
                                                                 self.core.position =
-                                                                        cgmath::Point3::new(
-                                                                                0.0, 0.0, 0.0,
-                                                                        );
+                                                                        Point3::new(0.0, 0.0, 0.0);
                                                         }
                                                         ui.end_row();
 
@@ -154,9 +148,8 @@ impl Camera
                                                         .speed(1.0))
                                                                 .changed()
                                                         {
-                                                                self.core.yaw = Rad::from(
-                                                                        cgmath::Deg(yaw_deg),
-                                                                );
+                                                                self.core.yaw =
+                                                                        Rad::from(Deg(yaw_deg));
                                                         }
                                                         ui.end_row();
 
@@ -172,9 +165,8 @@ impl Camera
                                                         .speed(1.0))
                                                                 .changed()
                                                         {
-                                                                self.core.pitch = Rad::from(
-                                                                        cgmath::Deg(pitch_deg),
-                                                                );
+                                                                self.core.pitch =
+                                                                        Rad::from(Deg(pitch_deg));
                                                         }
                                                         ui.end_row();
                                                 });
@@ -201,12 +193,11 @@ impl Camera
                 self.projection.fovy = Deg(self.config.fovy.0).into();
         }
 
-        pub fn new(config: &SurfaceConfiguration) -> Self
+        pub fn new() -> Self
         {
-                let core =
-                        CameraCore::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+                let core = CameraCore::new((0.0, 5.0, 10.0), Deg(-90.0), Deg(-20.0));
 
-                let projection = Projection::new(cgmath::Deg(60.0), 0.1, 100.0);
+                let projection = Projection::new(Deg(60.0), 0.1, 100.0);
 
                 let config = CameraConfig::default();
 
@@ -306,7 +297,7 @@ impl CameraUniform
         {
                 use cgmath::SquareMatrix;
                 Self {
-                        view_proj: cgmath::Matrix4::identity().into(),
+                        view_proj: Matrix4::identity().into(),
                         view_position: [0.0; 4],
                 }
         }
@@ -323,11 +314,11 @@ impl CameraUniform
 }
 
 #[rustfmt::skip]
-pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
-    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, 0.5, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, 0.5, 1.0),
+pub const OPENGL_TO_WGPU_MATRIX: Matrix4<f32> = Matrix4::from_cols(
+    Vector4::new(1.0, 0.0, 0.0, 0.0),
+    Vector4::new(0.0, 1.0, 0.0, 0.0),
+    Vector4::new(0.0, 0.0, 0.5, 0.0),
+    Vector4::new(0.0, 0.0, 0.5, 1.0),
 );
 
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
@@ -412,15 +403,15 @@ impl Projection
 #[derive(Debug)]
 pub struct CameraController
 {
-        amount_left: f32,
-        amount_right: f32,
-        amount_forward: f32,
-        amount_backward: f32,
-        amount_up: f32,
-        amount_down: f32,
-        rotate_horizontal: f32,
-        rotate_vertical: f32,
-        scroll: f32,
+        pub amount_left: f32,
+        pub amount_right: f32,
+        pub amount_forward: f32,
+        pub amount_backward: f32,
+        pub amount_up: f32,
+        pub amount_down: f32,
+        pub rotate_horizontal: f32,
+        pub rotate_vertical: f32,
+        pub scroll: f32,
 }
 
 impl CameraController
