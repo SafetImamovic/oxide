@@ -63,14 +63,14 @@ impl Camera
                                                         ui.label("Sensitivity");
                                                         ui.add(egui::Slider::new(
                                                                 &mut self.config.sensitivity,
-                                                                0.0..=2.0,
+                                                                0.0..=10.0,
                                                         ));
                                                         ui.end_row();
 
                                                         ui.label("Speed");
                                                         ui.add(egui::Slider::new(
                                                                 &mut self.config.speed,
-                                                                0.0..=2.0,
+                                                                0.0..=10.0,
                                                         ));
                                                         ui.end_row();
 

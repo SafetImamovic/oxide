@@ -1,9 +1,9 @@
 use crate::camera::Camera;
 use crate::engine::FillMode;
 use crate::renderer::graph::RenderGraph;
-use crate::ui::MovementUiConfig;
+use crate::ui::draw_dpad;
 use derivative::Derivative;
-use egui::{Context, FontData, FontDefinitions, FontFamily, Id};
+use egui::{Context, FontData, FontDefinitions, FontFamily};
 use egui_wgpu::Renderer;
 use egui_wgpu::ScreenDescriptor;
 use egui_winit::State;
@@ -334,14 +334,7 @@ impl GuiRenderer
                         });
                 }
 
-                let mvmnt_cfg = MovementUiConfig::default();
-
-                crate::ui::show_movement_controls(
-                        self.context(),
-                        Id::new(0),
-                        &mvmnt_cfg,
-                        &mut camera.controller,
-                );
+                draw_dpad(self.context(), &mut camera.controller);
 
                 *ui_scale = scale;
                 if *fill_mode != temp_fill_mode
