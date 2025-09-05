@@ -7,6 +7,7 @@ use derivative::Derivative;
 
 use crate::renderer::pipeline::{PipelineKind, PipelineManager};
 use crate::resource::Resources;
+use crate::texture::Texture;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -39,13 +40,20 @@ impl RenderGraph
                 encoder: &mut wgpu::CommandEncoder,
                 pipeline_manager: &PipelineManager,
                 camera: &wgpu::BindGroup,
+                depth_texture: &Texture,
         )
         {
                 for pass in self.passes.iter_mut()
                 {
                         if pass.enabled()
                         {
-                                pass.record(&view, encoder, &camera, &pipeline_manager);
+                                pass.record(
+                                        &view,
+                                        encoder,
+                                        &camera,
+                                        &pipeline_manager,
+                                        depth_texture,
+                                );
                         }
                 }
         }
@@ -82,6 +90,7 @@ pub trait RenderPass
                 encoder: &mut wgpu::CommandEncoder,
                 camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
+                depth_texture: &Texture,
         );
 }
 
@@ -168,6 +177,7 @@ impl RenderPass for BackgroundPass
                 encoder: &mut wgpu::CommandEncoder,
                 #[allow(unused_variables)] camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
+                depth_texture: &Texture,
         )
         {
                 // For a background pass, we typically don't need depth testing
@@ -181,12 +191,10 @@ impl RenderPass for BackgroundPass
                                         store: wgpu::StoreOp::Store,
                                 },
                         })],
-                        depth_stencil_attachment: None, // Background doesn't need depth
+                        depth_stencil_attachment: None,
                         occlusion_query_set: None,
                         timestamp_writes: None,
                 });
-
-                render_pass.set_pipeline(pipeline_manager.get(PipelineKind::Geometry));
         }
 }
 
@@ -254,6 +262,7 @@ impl RenderPass for GeometryPass
                 encoder: &mut wgpu::CommandEncoder,
                 camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
+                depth_texture: &Texture,
         )
         {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -266,7 +275,14 @@ impl RenderPass for GeometryPass
                                         store: wgpu::StoreOp::Store,
                                 },
                         })],
-                        depth_stencil_attachment: None,
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                                view: &depth_texture.view,
+                                depth_ops: Some(wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(1.0),
+                                        store: wgpu::StoreOp::Store,
+                                }),
+                                stencil_ops: None,
+                        }),
                         occlusion_query_set: None,
                         timestamp_writes: None,
                 });

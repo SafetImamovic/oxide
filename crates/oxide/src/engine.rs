@@ -188,6 +188,7 @@ impl Engine
                         &mut encoder,
                         &state.pipeline_manager,
                         &state.camera.get_bind_group(&state.device),
+                        &state.depth_texture,
                 );
 
                 if self.config.enable_debug
@@ -272,6 +273,12 @@ impl Engine
                         .surface
                         .configure(&state.device, &state.surface_manager.configuration);
 
+                state.depth_texture = crate::texture::Texture::create_depth_texture(
+                        &state.device,
+                        &state.surface_manager.configuration,
+                        "depth_texture",
+                );
+
                 if state.camera.config.aspect_ratio_correction
                 {
                         let aspect = final_width as f32 / final_height as f32;
@@ -319,6 +326,8 @@ pub struct EngineState
         pub queue: wgpu::Queue,
 
         pub camera: Camera,
+
+        pub depth_texture: crate::texture::Texture,
 
         pub vertex_buffers: Vec<wgpu::Buffer>,
 
@@ -374,12 +383,19 @@ impl EngineState
 
                 let camera = Camera::new();
 
+                let depth_texture = crate::texture::Texture::create_depth_texture(
+                        &device,
+                        &surface_manager.configuration,
+                        "depth_texture",
+                );
+
                 Ok(EngineState {
                         instance,
                         camera,
                         render_graph,
                         pipeline_manager,
                         adapter,
+                        depth_texture,
                         device,
                         queue,
                         gui,

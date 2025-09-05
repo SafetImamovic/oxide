@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use crate::{engine::FillMode, geometry::vertex::Vertex};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum PipelineKind
@@ -138,7 +137,13 @@ impl PipelineManager
                                 conservative: false,
                                 unclipped_depth: false,
                         },
-                        depth_stencil: None,
+                        depth_stencil: Some(wgpu::DepthStencilState {
+                                format: crate::texture::Texture::DEPTH_FORMAT,
+                                depth_write_enabled: true,
+                                depth_compare: wgpu::CompareFunction::Less,
+                                stencil: wgpu::StencilState::default(),
+                                bias: wgpu::DepthBiasState::default(),
+                        }),
                         multisample: wgpu::MultisampleState::default(),
                         multiview: None,
                         cache: None,
