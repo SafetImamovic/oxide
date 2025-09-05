@@ -170,7 +170,10 @@ impl Engine
                 &mut self.input_manager
         }
 
-        pub fn render(&mut self) -> Result<()>
+        pub fn render(
+                &mut self,
+                dt: &Duration,
+        ) -> Result<()>
         {
                 let state = self.state.as_mut().context("EngineState missing")?;
                 let window = self.window.as_ref().context("Window missing")?;
@@ -199,6 +202,9 @@ impl Engine
 
                 state.queue.submit(std::iter::once(encoder.finish()));
                 output.present();
+
+                state.update(*dt);
+
                 Ok(())
         }
 
@@ -725,8 +731,6 @@ impl ApplicationHandler<EngineState> for Engine
 
                 let mut last_render_time = instant::Instant::now();
 
-                state.update(dt);
-
                 state.gui
                         .renderer
                         .handle_input(&self.window.as_ref().unwrap(), &event);
@@ -745,7 +749,7 @@ impl ApplicationHandler<EngineState> for Engine
                         {
                                 let start = instant::Instant::now();
 
-                                match self.render()
+                                match self.render(&dt)
                                 {
                                         Ok(_) =>
                                         {
@@ -757,21 +761,13 @@ impl ApplicationHandler<EngineState> for Engine
 
                                                 window.request_redraw();
 
-                                                let duration = start.elapsed();
-
-                                                let _fps = 1.0 / duration.as_secs_f32();
-
                                                 let now = instant::Instant::now();
-                                                dt = now - last_render_time;
-                                                last_render_time = now;
 
-                                                /*
-                                                log::info!(
-                                                        "Render frame took: {:.2} ms, FPS: {:.1}",
-                                                        duration.as_secs_f64() * 1000.0,
-                                                        fps
-                                                );
-                                                */
+                                                dt = now - last_render_time;
+
+                                                log::info!("dt: {:?}", dt);
+
+                                                last_render_time = now;
                                         }
                                         Err(e) =>
                                         {
