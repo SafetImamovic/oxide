@@ -166,7 +166,7 @@ impl RenderPass for BackgroundPass
                 &mut self,
                 view: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
-                camera: &wgpu::BindGroup,
+                #[allow(unused_variables)] camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
         )
         {
