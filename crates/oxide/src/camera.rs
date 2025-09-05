@@ -15,6 +15,7 @@ pub struct Camera
         pub uniform: CameraUniform,
         pub config: CameraConfig,
         pub locked_in: bool,
+        pub show_dpad: bool,
 }
 
 #[derive(Debug)]
@@ -79,6 +80,10 @@ impl Camera
                                                                 &mut self.config.fovy.0,
                                                                 1.0..=179.0,
                                                         ));
+                                                        ui.end_row();
+
+                                                        ui.label("D-Pad");
+                                                        ui.checkbox(&mut self.show_dpad, "");
                                                         ui.end_row();
 
                                                         ui.label("Locked In");
@@ -214,6 +219,7 @@ impl Camera
                         uniform,
                         config,
                         locked_in: true,
+                        show_dpad: false,
                 }
         }
 

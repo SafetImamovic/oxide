@@ -3,7 +3,7 @@ use crate::engine::FillMode;
 use crate::renderer::graph::RenderGraph;
 use crate::ui::draw_dpad;
 use derivative::Derivative;
-use egui::{Context, FontData, FontDefinitions, FontFamily};
+use egui::{Align2, Context, FontData, FontDefinitions, FontFamily, Vec2};
 use egui_wgpu::Renderer;
 use egui_wgpu::ScreenDescriptor;
 use egui_winit::State;
@@ -231,7 +231,7 @@ impl GuiRenderer
                         });
 
                 egui::Window::new("Stats")
-                        .anchor(egui::Align2::LEFT_TOP, egui::Vec2::ZERO)
+                        .anchor(Align2::LEFT_TOP, Vec2::ZERO)
                         .fixed_pos(egui::pos2(10.0, 20.0))
                         .default_width(200.0)
                         .show(self.context(), |ui| {
@@ -241,7 +241,7 @@ impl GuiRenderer
 
                 if self.show_right_panel
                 {
-                        egui::SidePanel::right("Right Panel").resizable(true).default_width(400.0).show(self.context(), |ui| {
+                        egui::Window::new("Right Panel").resizable(true).default_width(400.0).anchor(Align2::RIGHT_TOP, Vec2::ZERO).show(self.context(), |ui| {
                                 egui::ScrollArea::new(true).show(ui, |ui| {
                                         // UI scale controls
                                         ui.horizontal(|ui| {
@@ -334,7 +334,10 @@ impl GuiRenderer
                         });
                 }
 
-                draw_dpad(self.context(), &mut camera.controller);
+                if camera.show_dpad
+                {
+                        draw_dpad(self.context(), &mut camera.controller);
+                }
 
                 *ui_scale = scale;
                 if *fill_mode != temp_fill_mode

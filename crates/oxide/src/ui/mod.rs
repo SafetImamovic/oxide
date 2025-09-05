@@ -43,77 +43,105 @@ pub fn draw_dpad(
         controller: &mut CameraController,
 )
 {
-        let pointer_down = ctx.input(|i| i.pointer.primary_down());
-        let bsize = Vec2::new(32.0, 32.0);
+        let bsize = Vec2::new(96.0, 96.0);
 
         egui::Area::new(egui::Id::from("dpad"))
                 .anchor(Align2::LEFT_BOTTOM, egui::vec2(10.0, -10.0)) // bottom-left corner
                 .show(ctx, |ui| {
-                        // Forward
-                        ui.horizontal_centered(|ui| {
-                                let up = ui.add_sized(
-                                        bsize,
-                                        Button::new("↑").sense(egui::Sense::drag()),
-                                );
-                                controller.amount_forward = if up.is_pointer_button_down_on()
-                                        || (up.hovered() && pointer_down)
-                                {
-                                        1.0
-                                }
-                                else
-                                {
-                                        0.0
-                                };
-                        });
+                        egui::Grid::new("dpad_grid")
+                                .spacing(Vec2::new(0.0, 0.0))
+                                .num_columns(3)
+                                .show(ui, |ui| {
+                                        let up = ui.add_sized(
+                                                bsize,
+                                                Button::new("UP").sense(egui::Sense::drag()),
+                                        );
+                                        controller.amount_up = if up.is_pointer_button_down_on()
+                                        {
+                                                1.0
+                                        }
+                                        else
+                                        {
+                                                0.0
+                                        };
 
-                        // Left / Right
-                        ui.horizontal(|ui| {
-                                let left = ui.add_sized(
-                                        bsize,
-                                        Button::new("←").sense(egui::Sense::drag()),
-                                );
-                                controller.amount_left = if left.is_pointer_button_down_on()
-                                        || (left.hovered() && pointer_down)
-                                {
-                                        1.0
-                                }
-                                else
-                                {
-                                        0.0
-                                };
+                                        let forward = ui.add_sized(
+                                                bsize,
+                                                Button::new("FORWARD").sense(egui::Sense::drag()),
+                                        );
+                                        controller.amount_forward = if forward
+                                                .is_pointer_button_down_on()
+                                        {
+                                                1.0
+                                        }
+                                        else
+                                        {
+                                                0.0
+                                        };
 
-                                ui.add_space(8.0);
+                                        let down = ui.add_sized(
+                                                bsize,
+                                                Button::new("DOWN").sense(egui::Sense::drag()),
+                                        );
+                                        controller.amount_down = if down.is_pointer_button_down_on()
+                                        {
+                                                1.0
+                                        }
+                                        else
+                                        {
+                                                0.0
+                                        };
 
-                                let right = ui.add_sized(
-                                        bsize,
-                                        Button::new("→").sense(egui::Sense::drag()),
-                                );
-                                controller.amount_right = if right.is_pointer_button_down_on()
-                                        || (right.hovered() && pointer_down)
-                                {
-                                        1.0
-                                }
-                                else
-                                {
-                                        0.0
-                                };
-                        });
+                                        ui.end_row();
 
-                        // Backward
-                        ui.horizontal_centered(|ui| {
-                                let down = ui.add_sized(
-                                        bsize,
-                                        Button::new("↓").sense(egui::Sense::drag()),
-                                );
-                                controller.amount_backward = if down.is_pointer_button_down_on()
-                                        || (down.hovered() && pointer_down)
-                                {
-                                        1.0
-                                }
-                                else
-                                {
-                                        0.0
-                                };
-                        });
+                                        let left = ui.add_sized(
+                                                bsize,
+                                                Button::new("LEFT").sense(egui::Sense::drag()),
+                                        );
+                                        controller.amount_left = if left.is_pointer_button_down_on()
+                                        {
+                                                1.0
+                                        }
+                                        else
+                                        {
+                                                0.0
+                                        };
+
+                                        ui.add_space(bsize.x);
+
+                                        let right = ui.add_sized(
+                                                bsize,
+                                                Button::new("RIGHT").sense(egui::Sense::drag()),
+                                        );
+                                        controller.amount_right = if right
+                                                .is_pointer_button_down_on()
+                                        {
+                                                1.0
+                                        }
+                                        else
+                                        {
+                                                0.0
+                                        };
+
+                                        ui.end_row();
+
+                                        ui.add_space(bsize.x);
+
+                                        let backward = ui.add_sized(
+                                                bsize,
+                                                Button::new("BACKWARD").sense(egui::Sense::drag()),
+                                        );
+                                        controller.amount_backward = if backward
+                                                .is_pointer_button_down_on()
+                                        {
+                                                1.0
+                                        }
+                                        else
+                                        {
+                                                0.0
+                                        };
+
+                                        ui.add_space(bsize.x);
+                                });
                 });
 }
