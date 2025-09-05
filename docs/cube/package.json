@@ -1,0 +1,15 @@
+{
+  "name": "cube",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "cube_bg.wasm",
+    "cube.js",
+    "cube.d.ts"
+  ],
+  "main": "cube.js",
+  "types": "cube.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

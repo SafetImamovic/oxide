@@ -107,7 +107,7 @@ pub fn draw_dpad(
                                                 0.0
                                         };
 
-                                        ui.add_space(bsize.x);
+                                        ui.label("");
 
                                         let right = ui.add_sized(
                                                 bsize,
@@ -125,7 +125,7 @@ pub fn draw_dpad(
 
                                         ui.end_row();
 
-                                        ui.add_space(bsize.x);
+                                        ui.label("");
 
                                         let backward = ui.add_sized(
                                                 bsize,
@@ -141,7 +141,8 @@ pub fn draw_dpad(
                                                 0.0
                                         };
 
-                                        ui.add_space(bsize.x);
+                                        ui.label("");
+                                        ui.end_row();
                                 });
                 });
 }

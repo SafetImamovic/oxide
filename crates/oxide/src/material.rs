@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct Material
 {
         pub name: String,

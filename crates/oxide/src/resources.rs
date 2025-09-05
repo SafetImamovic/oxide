@@ -23,6 +23,20 @@ pub fn load_resources() -> PathBuf
         panic!("No resources folder found!");
 }
 
+#[cfg(target_arch = "wasm32")]
+fn format_url(file_name: &str) -> reqwest::Url
+{
+        let window = web_sys::window().unwrap();
+        let location = window.location();
+        let mut origin = location.origin().unwrap();
+        if !origin.ends_with("learn-wgpu")
+        {
+                origin = format!("{}/learn-wgpu", origin);
+        }
+        let base = reqwest::Url::parse(&format!("{}/", origin,)).unwrap();
+        base.join(file_name).unwrap()
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn resource_path(file_name: &str) -> std::path::PathBuf
 {
@@ -65,6 +79,7 @@ pub async fn load_texture(
 {
         let data = load_binary(file_name).await?;
         crate::texture::Texture::from_bytes(device, queue, &data, file_name)
+                .map_err(|e| anyhow::anyhow!("Failed to load texture '{}': {}", file_name, e))
 }
 
 pub async fn load_model(
@@ -93,10 +108,12 @@ pub async fn load_model(
         .await?;
 
         let mut materials = Vec::new();
+
         for m in obj_materials?
         {
                 let diffuse_texture =
                         load_texture(&m.diffuse_texture.unwrap(), device, queue).await?;
+
                 let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                         layout,
                         entries: &[

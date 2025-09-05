@@ -29,6 +29,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::camera::Camera;
 use crate::config::Config;
+use crate::model::Model;
 use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
@@ -141,6 +142,8 @@ pub struct Engine
 
         pub config: Config,
 
+        pub model_name: String,
+
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
         pub window: Option<Arc<Window>>,
@@ -174,6 +177,7 @@ impl Engine
                         &state.pipeline_manager,
                         &state.camera.get_bind_group(&state.device),
                         &state.depth_texture,
+                        Some(&state.obj_model),
                 );
 
                 if self.config.enable_debug
@@ -193,6 +197,14 @@ impl Engine
                 state.update(*dt);
 
                 Ok(())
+        }
+
+        pub fn add_obj_model(
+                &mut self,
+                name: impl Into<String>,
+        )
+        {
+                self.model_name = name.into();
         }
 
         fn resize(&mut self)
@@ -296,6 +308,8 @@ impl Engine
 #[derive(Debug)]
 pub struct EngineState
 {
+        pub obj_model: Model,
+
         pub instance: wgpu::Instance,
 
         /// The rendering surface tied to the window.
@@ -337,7 +351,10 @@ impl EngineState
         /// # Panics
         /// Panics if surface creation, adapter selection, or device/queue
         /// creation fails.
-        pub async fn new(window: Arc<Window>) -> Result<EngineState>
+        pub async fn new(
+                window: Arc<Window>,
+                model_name: &str,
+        ) -> Result<EngineState>
         {
                 let instance = EngineBuilder::instance();
 
@@ -374,9 +391,47 @@ impl EngineState
                         "depth_texture",
                 );
 
+                let texture_bind_group_layout =
+                        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                                entries: &[
+                                        wgpu::BindGroupLayoutEntry {
+                                                binding: 0,
+                                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                                ty: wgpu::BindingType::Texture {
+                                                        multisampled: false,
+                                                        view_dimension:
+                                                                wgpu::TextureViewDimension::D2,
+                                                        sample_type:
+                                                                wgpu::TextureSampleType::Float {
+                                                                        filterable: true,
+                                                                },
+                                                },
+                                                count: None,
+                                        },
+                                        wgpu::BindGroupLayoutEntry {
+                                                binding: 1,
+                                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                                ty: wgpu::BindingType::Sampler(
+                                                        wgpu::SamplerBindingType::Filtering,
+                                                ),
+                                                count: None,
+                                        },
+                                ],
+                                label: Some("texture_bind_group_layout"),
+                        });
+
+                let obj_model = crate::resources::load_model(
+                        model_name,
+                        &device,
+                        &queue,
+                        &texture_bind_group_layout,
+                )
+                .await?;
+
                 Ok(EngineState {
                         instance,
                         camera,
+                        obj_model,
                         render_graph,
                         pipeline_manager,
                         adapter,
@@ -603,8 +658,11 @@ impl ApplicationHandler<EngineState> for Engine
 
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                        // Native builds can block on async state initialization.
-                        self.state = Some(pollster::block_on(EngineState::new(window)).unwrap());
+                        self.state = Some(pollster::block_on(EngineState::new(
+                                window,
+                                self.model_name.as_str(),
+                        ))
+                        .unwrap());
                 }
 
                 #[cfg(target_arch = "wasm32")]
@@ -673,11 +731,9 @@ impl ApplicationHandler<EngineState> for Engine
 
                         let state = self.state.as_mut().unwrap();
 
-                        self.resources.lock().unwrap().upload_all(&state.device);
-
                         state.build_pipelines();
 
-                        state.build_passes(self.resources.clone());
+                        state.build_passes();
                 }
         }
 
@@ -875,11 +931,14 @@ impl EngineBuilder
         {
                 let config = Config::new();
 
+                crate::resources::load_resources();
+
                 Self {
                         engine: Engine {
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 last_render_time: Duration::from_secs_f32(0.0),
+                                model_name: String::from(""),
                                 config,
                                 state: None,
                                 time: None,

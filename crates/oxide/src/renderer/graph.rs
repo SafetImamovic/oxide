@@ -37,6 +37,7 @@ impl RenderGraph
                 pipeline_manager: &PipelineManager,
                 camera: &wgpu::BindGroup,
                 depth_texture: &Texture,
+                obj_model: Option<&crate::model::Model>,
         )
         {
                 for pass in self.passes.iter_mut()
@@ -49,6 +50,7 @@ impl RenderGraph
                                         &camera,
                                         &pipeline_manager,
                                         depth_texture,
+                                        obj_model,
                                 );
                         }
                 }
@@ -87,6 +89,7 @@ pub trait RenderPass
                 camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
                 depth_texture: &Texture,
+                obj_model: Option<&crate::model::Model>,
         );
 }
 
@@ -174,6 +177,7 @@ impl RenderPass for BackgroundPass
                 #[allow(unused_variables)] camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
                 depth_texture: &Texture,
+                obj_model: Option<&crate::model::Model>,
         )
         {
                 // For a background pass, we typically don't need depth testing
@@ -258,6 +262,7 @@ impl RenderPass for GeometryPass
                 camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
                 depth_texture: &Texture,
+                obj_model: Option<&crate::model::Model>,
         )
         {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -285,5 +290,8 @@ impl RenderPass for GeometryPass
                 render_pass.set_pipeline(pipeline_manager.get(PipelineKind::Geometry));
 
                 render_pass.set_bind_group(0, camera, &[]);
+
+                use crate::model::DrawModel;
+                render_pass.draw_mesh_instanced(&obj_model.unwrap().meshes[0], 0..1);
         }
 }
