@@ -1,0 +1,27 @@
+[package]
+name = "de_dust2"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "de_dust_2_bin"
+path = "./src/main.rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+oxide = { path = "../../oxide" }
+oxide-macro = { path = "../../oxide-macro" }
+anyhow = "1.0.99"
+env_logger = "0.11.8"
+log = "0.4.27"
+winit = "0.30.12"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+instant = { version = "0.1.13", features = ["wasm-bindgen"] }
+console_error_panic_hook = "0.1.7"
+console_log = "1.0.0"
+wasm-bindgen = "0.2.100"
+wasm-bindgen-futures = "0.4.50"
+

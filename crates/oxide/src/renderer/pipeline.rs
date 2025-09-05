@@ -1,4 +1,5 @@
-use crate::{engine::FillMode, geometry::vertex::Vertex};
+use crate::engine::FillMode;
+use crate::model::Vertex;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
@@ -107,15 +108,13 @@ impl PipelineManager
                                 push_constant_ranges: &[],
                         });
 
-                let vertex_buffer = Vertex::get_desc();
-
                 let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                         label: Some("Geometry Pipeline"),
                         layout: Some(&render_pipeline_layout),
                         vertex: wgpu::VertexState {
                                 module: &shader,
                                 entry_point: Some("vs_main"),
-                                buffers: &[vertex_buffer],
+                                buffers: &[crate::model::ModelVertex::desc()],
                                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                         },
                         fragment: Some(wgpu::FragmentState {

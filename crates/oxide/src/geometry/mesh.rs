@@ -1,6 +1,7 @@
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
-use crate::geometry::{primitives::*, vertex::Vertex};
+use crate::geometry::primitives::*;
+use crate::model::ModelVertex;
 
 pub enum Primitive
 {
@@ -17,7 +18,7 @@ pub struct Mesh
 
         name: String,
         // CPU-Side data
-        vertices: Vec<Vertex>,
+        vertices: Vec<ModelVertex>,
         indices: Vec<u16>,
 
         // GPU-Side data
@@ -34,7 +35,7 @@ impl Mesh
 {
         pub fn new(
                 name: impl Into<String>,
-                vertices: Vec<Vertex>,
+                vertices: Vec<ModelVertex>,
                 indices: Vec<u16>,
         ) -> Self
         {
@@ -142,10 +143,11 @@ impl Mesh
         ) -> Self
         {
                 // Adjust this closure to match your Vertex layout if needed.
-                Self::generate_n_gon_with_radius(sides, radius, |pos, _i| Vertex {
+                Self::generate_n_gon_with_radius(sides, radius, |pos, _i| ModelVertex {
                         // If your Vertex doesn't have these fields or Default, adapt accordingly.
                         position: pos,
-                        ..Default::default()
+                        tex_coords: [0.0, 0.0],
+                        normal: [0.0, 0.0, 0.0],
                 })
         }
 
@@ -156,7 +158,7 @@ impl Mesh
                 mut make_vertex: F,
         ) -> Self
         where
-                F: FnMut([f32; 3], usize) -> Vertex,
+                F: FnMut([f32; 3], usize) -> ModelVertex,
         {
                 Self::generate_n_gon_with_radius(sides, 1.0, move |pos, i| make_vertex(pos, i))
         }
@@ -172,7 +174,7 @@ impl Mesh
                 mut make_vertex: F,
         ) -> Self
         where
-                F: FnMut([f32; 3], usize) -> Vertex,
+                F: FnMut([f32; 3], usize) -> ModelVertex,
         {
                 assert!(sides >= 3, "n-gon must have at least 3 sides");
                 assert!(
