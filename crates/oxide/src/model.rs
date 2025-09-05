@@ -1,3 +1,5 @@
+use crate::geometry::mesh::Mesh;
+
 pub trait Vertex
 {
         fn desc() -> wgpu::VertexBufferLayout<'static>;
@@ -39,4 +41,10 @@ impl Vertex for ModelVertex
                         ],
                 }
         }
+}
+
+pub struct Model
+{
+        pub meshes: Vec<Mesh>,
+        pub materials: Vec<crate::material::Material>,
 }

@@ -29,13 +29,12 @@ use wasm_bindgen::prelude::*;
 
 use crate::camera::Camera;
 use crate::config::Config;
-use crate::input::manager::InputManager;
 use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
+use crate::renderer::pipeline::PipelineManager;
 use crate::renderer::surface::SurfaceManager;
 use crate::ui::UiSystem;
-use crate::{renderer::pipeline::PipelineManager, resource::Resources};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use winit::event::{DeviceEvent, DeviceId, ElementState};
@@ -140,9 +139,6 @@ pub struct Engine
 
         pub last_render_time: Duration,
 
-        /// Manages all the defined keybinds and behavior.
-        pub input_manager: InputManager,
-
         pub config: Config,
 
         // --- Core Context ---
@@ -155,21 +151,10 @@ pub struct Engine
         // --- Timing ---
         /// The timestamp of the last frame, used for delta time calculations.
         pub time: Option<instant::Instant>,
-
-        pub resources: Arc<Mutex<Resources>>,
-
-        // --- Misc ---
-        /// Input system state (keyboard, mouse, gamepad, etc.).
-        pub input: Option<crate::input::InputState>,
 }
 
 impl Engine
 {
-        pub fn input(&mut self) -> &mut InputManager
-        {
-                &mut self.input_manager
-        }
-
         pub fn render(
                 &mut self,
                 dt: &Duration,
@@ -423,10 +408,7 @@ impl EngineState
                 );
         }
 
-        pub fn build_passes(
-                &mut self,
-                resources: Arc<Mutex<Resources>>,
-        )
+        pub fn build_passes(&mut self)
         {
                 let bg_pass = BackgroundPass {
                         name: "bg_pass".to_string(),
@@ -464,7 +446,6 @@ impl EngineState
                 let geometry_pass = GeometryPass {
                         name: "geometry_pass".to_string(),
                         enabled: true,
-                        resources: resources.clone(),
                 };
 
                 self.render_graph.add_pass(Box::new(bg_pass));
@@ -663,13 +644,11 @@ impl ApplicationHandler<EngineState> for Engine
                 {
                         let state = self.state.as_mut().unwrap();
 
-                        self.resources.lock().unwrap().upload_all(&state.device);
-
                         let state = self.state.as_mut().unwrap();
 
                         state.build_pipelines();
 
-                        state.build_passes(self.resources.clone());
+                        state.build_passes();
                 }
         }
 
@@ -894,21 +873,16 @@ impl EngineBuilder
         /// initialization.
         pub fn new() -> Self
         {
-                let resources = Arc::new(Mutex::new(Resources::new()));
-
                 let config = Config::new();
 
                 Self {
                         engine: Engine {
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
-                                input_manager: InputManager::new(),
                                 last_render_time: Duration::from_secs_f32(0.0),
-                                resources,
                                 config,
                                 state: None,
                                 time: None,
-                                input: None,
                                 window: None,
                         },
                 }
@@ -955,16 +929,6 @@ impl EngineBuilder
         ) -> Self
         {
                 self.engine.time = Some(time);
-                self
-        }
-
-        /// Set the input system
-        pub fn with_input(
-                mut self,
-                input: crate::input::InputState,
-        ) -> Self
-        {
-                self.engine.input = Some(input);
                 self
         }
 

@@ -8,7 +8,7 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-oxide-macro = { path = "../oxide-macro" }
+tobj = { version = "4.0.3", default-features = false, features = ["async"] }
 serde = { version = "1.0.219", features = ["derive"] }
 toml = { version = "0.9.4", features = ["serde"] }
 anyhow = "1.0.98"
@@ -36,6 +36,7 @@ default-features = false
 features = ["png", "jpeg"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+reqwest = "0.12.23"
 instant = { version = "0.1.13", features = ["wasm-bindgen"] }
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
@@ -47,9 +48,9 @@ web-sys = { version = "0.3.77", features = [
     "Window",
     "Element",
     "Navigator",
+    "Location",
     "HtmlElement"
 ] }
 # Modified egui for WASM without clipboard
 egui = { version = "0.32.0", default-features = false, features = [] }
-
 

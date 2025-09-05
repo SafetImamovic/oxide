@@ -1,12 +1,8 @@
-use std::{
-        any::Any,
-        sync::{Arc, Mutex},
-};
+use std::any::Any;
 
 use derivative::Derivative;
 
 use crate::renderer::pipeline::{PipelineKind, PipelineManager};
-use crate::resource::Resources;
 use crate::texture::Texture;
 
 #[derive(Derivative)]
@@ -202,7 +198,6 @@ pub struct GeometryPass
 {
         pub name: String,
         pub enabled: bool,
-        pub resources: Arc<Mutex<Resources>>,
 }
 
 impl RenderPass for GeometryPass
@@ -290,19 +285,5 @@ impl RenderPass for GeometryPass
                 render_pass.set_pipeline(pipeline_manager.get(PipelineKind::Geometry));
 
                 render_pass.set_bind_group(0, camera, &[]);
-
-                let resources = self.resources.lock().unwrap();
-
-                for mesh in resources.meshes.iter()
-                {
-                        render_pass.set_vertex_buffer(0, mesh.vertex_buffer().unwrap().slice(..));
-
-                        render_pass.set_index_buffer(
-                                mesh.index_buffer().unwrap().slice(..),
-                                mesh.index_format,
-                        );
-
-                        render_pass.draw_indexed(0..mesh.get_index_count(), 0, 0..1);
-                }
         }
 }

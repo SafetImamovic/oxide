@@ -7,24 +7,13 @@ pub fn run() -> anyhow::Result<()>
 {
         oxide::utils::bootstrap::show_start_message();
 
+        let resources = oxide::resources::load_resources();
+        log::info!("Loading Resources from: {}", resources.display());
+
         let engine = oxide::engine::EngineBuilder::new()
                 .with_debug_ui()
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
-
-        let _mesh_pentagon = Mesh::basic("pentagon", Primitive::Pentagon);
-
-        let _mesh_square = Mesh::basic("square", Primitive::Square);
-
-        let _mesh_triangle = Mesh::basic("triangle", Primitive::Triangle);
-
-        let hexagon = Mesh::generate_n_gon(128, 0.75);
-
-        {
-                let mut resources = engine.resources.lock().unwrap_or_else(|e| e.into_inner());
-
-                resources.add_mesh(hexagon);
-        }
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 
