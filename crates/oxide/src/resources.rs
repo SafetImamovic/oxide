@@ -9,6 +9,7 @@ use std::ops::Index;
 use std::path::{Path, PathBuf};
 use wgpu::util::DeviceExt;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn load_resources() -> PathBuf
 {
         if let Ok(dir) = std::env::var("CARGO_MANIFEST_DIR")
@@ -29,6 +30,13 @@ pub fn load_resources() -> PathBuf
 }
 
 #[cfg(target_arch = "wasm32")]
+pub fn load_resources() -> PathBuf
+{
+        // For WASM, return a virtual path
+        PathBuf::from("/resources/")
+}
+
+#[cfg(target_arch = "wasm32")]
 fn format_url(file_name: &str) -> reqwest::Url
 {
         let window = web_sys::window().unwrap();
@@ -43,9 +51,39 @@ fn format_url(file_name: &str) -> reqwest::Url
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn resource_path(file_name: &str) -> std::path::PathBuf
+pub fn resource_path(
+        file_name: &str,
+        crate_name: Option<&str>,
+) -> std::path::PathBuf
 {
         load_resources().join(file_name)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn resource_path(
+        file_name: &str,
+        crate_name: Option<&str>,
+) -> String
+{
+        if file_name.starts_with('/')
+        {
+                return file_name.to_string();
+        }
+
+        let window = web_sys::window().expect("no global `window` exists");
+        let location = window.location();
+        let pathname = location.pathname().unwrap_or_default();
+
+        let crate_name = pathname.split('/').nth(2).unwrap_or("").to_string();
+
+        if crate_name.is_empty()
+        {
+                format!("/resources/{}", file_name)
+        }
+        else
+        {
+                format!("/docs/{}/resources/{}", crate_name, file_name)
+        }
 }
 
 pub fn resource_path_relative(
@@ -59,22 +97,28 @@ pub fn resource_path_relative(
 
 pub async fn load_model(
         file_name: &str,
+        crate_name: Option<&str>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         material_bind_group_layout: &wgpu::BindGroupLayout,
         transform_bind_group_layout: &wgpu::BindGroupLayout,
 ) -> anyhow::Result<Model>
 {
-        let path = resource_path(file_name);
+        #[cfg(not(target_arch = "wasm32"))]
+        let path = resource_path(file_name, crate_name)
+                .to_string_lossy()
+                .to_string();
+
+        #[cfg(target_arch = "wasm32")]
+        let path = resource_path(file_name, crate_name);
 
         let (meshes, materials) = if file_name.ends_with(".obj")
         {
-                log::info!("Not implemented yet!");
-                load_gltf(path.to_str().unwrap())?
+                anyhow::bail!("OBJ format not supported");
         }
-        else if file_name.ends_with(".gltf")
+        else if file_name.ends_with(".gltf") || file_name.ends_with(".glb")
         {
-                load_gltf(path.to_str().unwrap())?
+                load_gltf(&path, crate_name).await?
         }
         else
         {
@@ -108,19 +152,23 @@ pub fn create_transform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGr
         })
 }
 
-pub fn load_gltf(path: &str) -> anyhow::Result<(Vec<MeshData>, Vec<MaterialData>)>
+pub async fn load_gltf(
+        path: &str,
+        crate_name: Option<&str>,
+) -> anyhow::Result<(Vec<MeshData>, Vec<MaterialData>)>
 {
-        log::info!("Loading glTF from {:?}", path);
+        log::info!("Loading 3D model from: {:?}", path);
 
-        let base_path = Path::new(path)
-                .parent()
-                .unwrap_or_else(|| Path::new("."))
-                .to_path_buf();
+        let (doc, buffers, images) = if path.ends_with(".glb")
+        {
+                load_glb(path, crate_name).await?
+        }
+        else
+        {
+                anyhow::bail!("Unsupported format: {}", path);
+        };
 
-        let (doc, buffers, images) = gltf::import(path)?;
-        // Check for embedded images
         println!("Found {} embedded images", images.len());
-
         for (i, image) in images.iter().enumerate()
         {
                 let format = match image.format
@@ -135,7 +183,6 @@ pub fn load_gltf(path: &str) -> anyhow::Result<(Vec<MeshData>, Vec<MaterialData>
                         gltf::image::Format::R16G16B16A16 => "R16G16B16A16",
                         _ => "unknown",
                 };
-                println!("  Image {}: - Format: {} - {} bytes", i, format, image.pixels.len());
         }
 
         let mut meshes = Vec::new();
@@ -145,56 +192,39 @@ pub fn load_gltf(path: &str) -> anyhow::Result<(Vec<MeshData>, Vec<MaterialData>
         for mat in doc.materials()
         {
                 let name = mat.name().unwrap_or("unnamed").to_string();
-
                 let pbr = mat.pbr_metallic_roughness();
 
                 println!("Processing material: {}", name);
 
+                // Handle texture loading differently for WASM vs native
                 let base_color_texture = pbr.base_color_texture().map(|tex_info| {
-                        let texture_index = tex_info.texture().index(); // This is the key!
-                        let tex_coord = tex_info.tex_coord(); // UV set index
+                        let texture_index = tex_info.texture().index();
+                        let tex_coord = tex_info.tex_coord();
 
                         println!(
                                 "  Material '{}' uses texture index: {}, UV set: {}",
                                 name, texture_index, tex_coord
                         );
 
+                        // For WASM, we'll handle texture loading separately
                         format!("{name}_baseColor.png")
                 });
 
-                // Also check if the material has any texture at all
                 if base_color_texture.is_none()
                 {
                         println!("Material '{}' has no base color texture", name);
                 }
 
-                log::info!("Material {}: Diffuse Texture: {:?}", name, base_color_texture);
-
-                let normal_texture = mat
-                        .normal_texture()
-                        .and_then(|t| t.texture().source().name())
-                        .map(|tex_name| base_path.join(tex_name).to_string_lossy().to_string());
-
-                let metallic_roughness_texture = pbr
-                        .metallic_roughness_texture()
-                        .and_then(|t| t.texture().source().name())
-                        .map(|tex_name| base_path.join(tex_name).to_string_lossy().to_string());
-
-                let diffuse_texture = mat
-                        .pbr_metallic_roughness()
-                        .base_color_texture()
-                        .and_then(|t| t.texture().source().name())
-                        .map(|tex_name| base_path.join(tex_name).to_string_lossy().to_string());
-
                 materials.push(MaterialData {
-                        name,
-                        diffuse_texture,
+                        name: name.clone(),
                         base_color_texture,
-                        normal_texture,
-                        metallic_roughness_texture,
                         base_color_factor: pbr.base_color_factor(),
                         metallic_factor: pbr.metallic_factor(),
                         roughness_factor: pbr.roughness_factor(),
+                        // These might not work in WASM without additional handling:
+                        diffuse_texture: None,
+                        normal_texture: None,
+                        metallic_roughness_texture: None,
                 });
         }
 
@@ -208,6 +238,59 @@ pub fn load_gltf(path: &str) -> anyhow::Result<(Vec<MeshData>, Vec<MaterialData>
         }
 
         Ok((meshes, materials))
+}
+
+async fn load_glb(
+        path: &str,
+        crate_name: Option<&str>,
+) -> anyhow::Result<(gltf::Document, Vec<gltf::buffer::Data>, Vec<gltf::image::Data>)>
+{
+        #[cfg(target_arch = "wasm32")]
+        {
+                use wasm_bindgen::JsCast;
+                use web_sys::Response;
+
+                let window =
+                        web_sys::window().ok_or_else(|| anyhow::anyhow!("No window available"))?;
+
+                let full_path = resource_path(path, crate_name);
+                log::info!("Fetching GLB from: {}", full_path);
+
+                let resp_value =
+                        wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(&full_path))
+                                .await
+                                .map_err(|e| anyhow::anyhow!("Failed to fetch GLB: {:?}", e))?;
+
+                let resp: Response = resp_value
+                        .dyn_into()
+                        .map_err(|e| anyhow::anyhow!("Failed to convert to Response: {:?}", e))?;
+
+                if !resp.ok()
+                {
+                        return Err(anyhow::anyhow!("HTTP error: {}", resp.status()));
+                }
+
+                let array_buffer =
+                        wasm_bindgen_futures::JsFuture::from(resp.array_buffer().map_err(|e| {
+                                anyhow::anyhow!("Failed to get array buffer: {:?}", e)
+                        })?)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Failed to await array buffer: {:?}", e))?;
+
+                let bytes = js_sys::Uint8Array::new(&array_buffer).to_vec();
+
+                // Import GLB - this should work since everything is embedded
+                gltf::import_slice(&bytes)
+                        .map_err(|e| anyhow::anyhow!("Failed to import GLB: {:?}", e))
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+                // Native loading - simple file read
+                let bytes = std::fs::read(path)?;
+                gltf::import_slice(&bytes)
+                        .map_err(|e| anyhow::anyhow!("Failed to import GLB: {:?}", e))
+        }
 }
 
 fn process_node(

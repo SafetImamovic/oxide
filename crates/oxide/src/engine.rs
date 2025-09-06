@@ -424,6 +424,7 @@ impl EngineState
 
                 let obj_model = crate::resources::load_model(
                         model_name,
+                        Some("de_dust2"),
                         &device,
                         &queue,
                         &create_material_bind_group_layout(&device),
@@ -718,6 +719,8 @@ impl ApplicationHandler<EngineState> for Engine
                         }));
                 }
 
+                let model_name = self.model_name.clone();
+
                 #[cfg(target_arch = "wasm32")]
                 {
                         // In WASM builds, async tasks must be spawned without blocking.
@@ -725,7 +728,8 @@ impl ApplicationHandler<EngineState> for Engine
                         if let Some(proxy) = self.proxy.take()
                         {
                                 wasm_bindgen_futures::spawn_local(async move {
-                                        let state_result = EngineState::new(window).await;
+                                        let state_result =
+                                                EngineState::new(window, model_name.as_str()).await;
                                         match state_result
                                         {
                                                 Ok(state) =>
@@ -788,6 +792,8 @@ impl ApplicationHandler<EngineState> for Engine
 
                         state.build_passes();
                 }
+
+                self.resize();
         }
 
         fn window_event(

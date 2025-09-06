@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Primjer | cube</title>
+    <title>Example | cube</title>
     <style>
         canvas {
           background-color: black;
@@ -14,13 +14,13 @@
           padding: 0;
         }
 
-	html {
-	  padding: 2rem;
+        html {
+          padding: 2rem;
         }
 
         body {
-	  height: calc(100vh - 4rem);
-	  width: calc(100vw - 4rem);
+          height: calc(100vh - 4rem);
+          width: calc(100vw - 4rem);
         }
     </style>
 </head>
@@ -29,7 +29,7 @@
     <script type="module">
         import init from './cube.js';
 
-	init().then(() => {
+        init().then(() => {
           console.log("WASM Loaded");
         })
         .catch(console.error);

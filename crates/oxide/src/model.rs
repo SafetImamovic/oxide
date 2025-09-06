@@ -75,9 +75,10 @@ impl Model
                                 // dummy 1x1 texture
                             let base_color_texture = if let Some(ref path) = mat.base_color_texture {
                                 println!("Attempting to load texture: {}", path);
-                                let full_path = resource_path(PathBuf::from(format!("textures\\{}", path)).to_str().unwrap());
+                                let full_path = resource_path(PathBuf::from(format!("textures\\{}", path)).to_str().unwrap(), Some("de_dust2"));
                                 println!("Full path: {:?}", full_path);
 
+                                #[cfg(not(target_arch = "wasm32"))]
                                 if !full_path.exists() {
                                     println!("❌ TEXTURE FILE NOT FOUND: {:?}", full_path);
                                     crate::texture::Texture::create_dummy(device, queue)
@@ -98,8 +99,12 @@ impl Model
                                         }
                                     }
                                 }
+
+
+                                #[cfg(target_arch = "wasm32")]
+                                crate::texture::Texture::create_dummy(device, queue)
+
                             } else {
-                                println!("ℹ️ No texture path specified for material: {}", mat.name);
                                 crate::texture::Texture::create_dummy(device, queue)
                             };
 
@@ -109,7 +114,7 @@ impl Model
                                         Some(crate::texture::Texture::from_bytes(
                                                 device,
                                                 queue,
-                                                &std::fs::read(resource_path(&path)).unwrap(),
+                                                &std::fs::read(resource_path(&path, Some("de_dust2"))).unwrap(),
                                                 &path,
                                         )
                                         .unwrap())
@@ -126,7 +131,7 @@ impl Model
                                         Some(crate::texture::Texture::from_bytes(
                                                 device,
                                                 queue,
-                                                &std::fs::read(resource_path(&path)).unwrap(),
+                                                &std::fs::read(resource_path(&path, Some("de_dust2"))).unwrap(),
                                                 &path,
                                         )
                                         .unwrap())

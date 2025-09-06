@@ -1,4 +1,3 @@
-use oxide::geometry::mesh::{Mesh, Primitive};
 use oxide_macro::oxide_main;
 use winit::keyboard::KeyCode;
 
@@ -15,7 +14,7 @@ pub fn run() -> anyhow::Result<()>
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 
-        engine.add_obj_model("scene.gltf");
+        engine.add_obj_model("scene.glb");
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 
