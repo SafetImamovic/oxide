@@ -29,12 +29,14 @@ use wasm_bindgen::prelude::*;
 
 use crate::camera::Camera;
 use crate::config::Config;
+use crate::material::create_material_bind_group_layout;
 use crate::model::Model;
 use crate::renderer::graph::BackgroundPass;
 use crate::renderer::graph::GeometryPass;
 use crate::renderer::graph::RenderGraph;
 use crate::renderer::pipeline::PipelineManager;
 use crate::renderer::surface::SurfaceManager;
+use crate::resources::create_transform_bind_group_layout;
 use crate::ui::UiSystem;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -424,7 +426,8 @@ impl EngineState
                         model_name,
                         &device,
                         &queue,
-                        &texture_bind_group_layout,
+                        &create_material_bind_group_layout(&device),
+                        &create_transform_bind_group_layout(&device),
                 )
                 .await?;
 
@@ -455,10 +458,33 @@ impl EngineState
 
         pub fn build_pipelines(&mut self)
         {
+                // Create transform bind group layout
+                let transform_bind_group_layout =
+                        self.device
+                                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                                        entries: &[wgpu::BindGroupLayoutEntry {
+                                                binding: 0,
+                                                visibility: wgpu::ShaderStages::VERTEX,
+                                                ty: wgpu::BindingType::Buffer {
+                                                        ty: wgpu::BufferBindingType::Uniform,
+                                                        has_dynamic_offset: false,
+                                                        min_binding_size: None,
+                                                },
+                                                count: None,
+                                        }],
+                                        label: Some("transform_bind_group_layout"),
+                                });
+
+                let material_bind_group_layout = create_material_bind_group_layout(&self.device);
+
                 self.pipeline_manager.build_geometry_pipeline(
                         &self.device,
                         &self.surface_manager.configuration,
-                        &[&self.camera.get_bind_group_layout(&self.device)],
+                        &[
+                                &self.camera.get_bind_group_layout(&self.device),
+                                &transform_bind_group_layout,
+                                &material_bind_group_layout,
+                        ],
                         &FillMode::Fill,
                 );
         }
@@ -556,11 +582,35 @@ impl EngineState
                         {
                                 log::info!("Fill Mode: {:?}", temp_fill_mode);
 
+                                // Create transform bind group layout
+                                let transform_bind_group_layout =
+                        self.device
+                                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                                        entries: &[wgpu::BindGroupLayoutEntry {
+                                                binding: 0,
+                                                visibility: wgpu::ShaderStages::VERTEX,
+                                                ty: wgpu::BindingType::Buffer {
+                                                        ty: wgpu::BufferBindingType::Uniform,
+                                                        has_dynamic_offset: false,
+                                                        min_binding_size: None,
+                                                },
+                                                count: None,
+                                        }],
+                                        label: Some("transform_bind_group_layout"),
+                                });
+
+                                let material_bind_group_layout =
+                                        create_material_bind_group_layout(&self.device);
+
                                 // Request Pipeline Rebuild
                                 self.pipeline_manager.build_geometry_pipeline(
                                         &self.device,
                                         &self.surface_manager.configuration,
-                                        &[&self.camera.get_bind_group_layout(&self.device)],
+                                        &[
+                                                &self.camera.get_bind_group_layout(&self.device),
+                                                &transform_bind_group_layout,
+                                                &material_bind_group_layout,
+                                        ],
                                         &temp_fill_mode,
                                 );
                         }
@@ -662,7 +712,10 @@ impl ApplicationHandler<EngineState> for Engine
                                 window,
                                 self.model_name.as_str(),
                         ))
-                        .unwrap());
+                        .unwrap_or_else(|e| {
+                                log::error!("Failed to initialize EngineState: {:?}", e);
+                                panic!("Failed to initialize EngineState");
+                        }));
                 }
 
                 #[cfg(target_arch = "wasm32")]

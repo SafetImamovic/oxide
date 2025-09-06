@@ -34,7 +34,7 @@ impl Default for CameraConfig
         fn default() -> Self
         {
                 Self {
-                        sensitivity: 0.1,
+                        sensitivity: 1.0,
                         speed: 1.0,
                         aspect_ratio_correction: true,
                         initial_aspect: Some(1.0),
@@ -64,15 +64,17 @@ impl Camera
                                                         ui.label("Sensitivity");
                                                         ui.add(egui::Slider::new(
                                                                 &mut self.config.sensitivity,
-                                                                0.0..=50.0,
-                                                        ));
+                                                                0.0..=10.0,
+                                                        )
+                                                        .step_by(0.1));
                                                         ui.end_row();
 
                                                         ui.label("Speed");
                                                         ui.add(egui::Slider::new(
                                                                 &mut self.config.speed,
-                                                                0.0..=50.0,
-                                                        ));
+                                                                0.0..=10.0,
+                                                        )
+                                                        .step_by(0.1));
                                                         ui.end_row();
 
                                                         ui.label("FOV Y");

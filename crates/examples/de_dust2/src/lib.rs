@@ -15,7 +15,7 @@ pub fn run() -> anyhow::Result<()>
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 
-        engine.add_obj_model("bugatti.obj");
+        engine.add_obj_model("scene.gltf");
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 

@@ -292,6 +292,22 @@ impl RenderPass for GeometryPass
                 render_pass.set_bind_group(0, camera, &[]);
 
                 use crate::model::DrawModel;
-                render_pass.draw_mesh_instanced(&obj_model.unwrap().meshes[0], 0..1);
+
+                for mesh in obj_model.unwrap().meshes.iter()
+                {
+                        // Set the transform bind group for THIS mesh
+                        render_pass.set_bind_group(1, &mesh.transform_bind_group, &[]);
+
+                        // Set the material bind group for THIS mesh's material
+                        let material_index = mesh.material;
+                        render_pass.set_bind_group(
+                                2,
+                                &obj_model.unwrap().materials[material_index].material_bind_group,
+                                &[],
+                        );
+
+                        // Draw the mesh
+                        render_pass.draw_mesh(mesh);
+                }
         }
 }
