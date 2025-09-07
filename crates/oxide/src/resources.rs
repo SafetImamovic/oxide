@@ -50,20 +50,7 @@ pub fn resource_path(
                 return file_name.to_string();
         }
 
-        let window = web_sys::window().expect("no global `window` exists");
-        let location = window.location();
-        let pathname = location.pathname().unwrap_or_default();
-
-        let crate_name = pathname.split('/').nth(2).unwrap_or("").to_string();
-
-        if crate_name.is_empty()
-        {
-                format!("/resources/{}", file_name)
-        }
-        else
-        {
-                format!("/docs/{}/resources/{}", crate_name, file_name)
-        }
+        format!("/resources/{}", file_name)
 }
 
 pub fn resource_path_relative(
