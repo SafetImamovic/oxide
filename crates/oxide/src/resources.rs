@@ -1,13 +1,8 @@
-use crate::geometry::mesh::{Mesh, MeshData};
+use crate::geometry::mesh::MeshData;
 use crate::material::MaterialData;
 use crate::model::{Model, ModelVertex};
 use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
-use gltf::accessor::Dimensions::Vec3;
-use gltf::image::Data;
-use std::io::{BufReader, Cursor};
-use std::ops::Index;
 use std::path::{Path, PathBuf};
-use wgpu::util::DeviceExt;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_resources() -> PathBuf
@@ -32,29 +27,14 @@ pub fn load_resources() -> PathBuf
 #[cfg(target_arch = "wasm32")]
 pub fn load_resources() -> PathBuf
 {
-        // For WASM, return a virtual path
         PathBuf::from("/resources/")
-}
-
-#[cfg(target_arch = "wasm32")]
-fn format_url(file_name: &str) -> reqwest::Url
-{
-        let window = web_sys::window().unwrap();
-        let location = window.location();
-        let mut origin = location.origin().unwrap();
-        if !origin.ends_with("learn-wgpu")
-        {
-                origin = format!("{}/learn-wgpu", origin);
-        }
-        let base = reqwest::Url::parse(&format!("{}/", origin,)).unwrap();
-        base.join(file_name).unwrap()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn resource_path(
         file_name: &str,
-        crate_name: Option<&str>,
-) -> std::path::PathBuf
+        #[allow(unused_variables)] crate_name: Option<&str>,
+) -> PathBuf
 {
         load_resources().join(file_name)
 }
@@ -62,7 +42,7 @@ pub fn resource_path(
 #[cfg(target_arch = "wasm32")]
 pub fn resource_path(
         file_name: &str,
-        crate_name: Option<&str>,
+        #[allow(unused_variables)] crate_name: Option<&str>,
 ) -> String
 {
         if file_name.starts_with('/')
@@ -114,9 +94,9 @@ pub async fn load_model(
 
         let (meshes, materials) = if file_name.ends_with(".obj")
         {
-                anyhow::bail!("OBJ format not supported");
+                anyhow::bail!("OBJ format not supported yet.");
         }
-        else if file_name.ends_with(".gltf") || file_name.ends_with(".glb")
+        else if file_name.ends_with(".glb")
         {
                 load_gltf(&path, crate_name).await?
         }
@@ -169,9 +149,10 @@ pub async fn load_gltf(
         };
 
         println!("Found {} embedded images", images.len());
-        for (i, image) in images.iter().enumerate()
+
+        for (_i, image) in images.iter().enumerate()
         {
-                let format = match image.format
+                let _format = match image.format
                 {
                         gltf::image::Format::R8 => "R8",
                         gltf::image::Format::R8G8 => "R8G8",
@@ -242,7 +223,7 @@ pub async fn load_gltf(
 
 async fn load_glb(
         path: &str,
-        crate_name: Option<&str>,
+        #[allow(unused_variables)] crate_name: Option<&str>,
 ) -> anyhow::Result<(gltf::Document, Vec<gltf::buffer::Data>, Vec<gltf::image::Data>)>
 {
         #[cfg(target_arch = "wasm32")]

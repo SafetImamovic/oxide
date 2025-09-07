@@ -1,6 +1,6 @@
-use std::any::Any;
-
 use derivative::Derivative;
+use std::any::Any;
+use std::collections::HashMap;
 
 use crate::renderer::pipeline::{PipelineKind, PipelineManager};
 use crate::texture::Texture;
@@ -37,7 +37,7 @@ impl RenderGraph
                 pipeline_manager: &PipelineManager,
                 camera: &wgpu::BindGroup,
                 depth_texture: &Texture,
-                obj_model: Option<&crate::model::Model>,
+                models: Option<&HashMap<String, crate::model::Model>>,
         )
         {
                 for pass in self.passes.iter_mut()
@@ -50,7 +50,7 @@ impl RenderGraph
                                         &camera,
                                         &pipeline_manager,
                                         depth_texture,
-                                        obj_model,
+                                        models,
                                 );
                         }
                 }
@@ -89,7 +89,7 @@ pub trait RenderPass
                 camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
                 depth_texture: &Texture,
-                obj_model: Option<&crate::model::Model>,
+                models: Option<&HashMap<String, crate::model::Model>>,
         );
 }
 
@@ -175,13 +175,13 @@ impl RenderPass for BackgroundPass
                 view: &wgpu::TextureView,
                 encoder: &mut wgpu::CommandEncoder,
                 #[allow(unused_variables)] camera: &wgpu::BindGroup,
-                pipeline_manager: &PipelineManager,
-                depth_texture: &Texture,
-                obj_model: Option<&crate::model::Model>,
+                #[allow(unused_variables)] pipeline_manager: &PipelineManager,
+                #[allow(unused_variables)] depth_texture: &Texture,
+                #[allow(unused_variables)] obj_model: Option<&HashMap<String, crate::model::Model>>,
         )
         {
                 // For a background pass, we typically don't need depth testing
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some(self.name()),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                 view,
@@ -262,7 +262,7 @@ impl RenderPass for GeometryPass
                 camera: &wgpu::BindGroup,
                 pipeline_manager: &PipelineManager,
                 depth_texture: &Texture,
-                obj_model: Option<&crate::model::Model>,
+                models: Option<&HashMap<String, crate::model::Model>>,
         )
         {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -293,21 +293,24 @@ impl RenderPass for GeometryPass
 
                 use crate::model::DrawModel;
 
-                for mesh in obj_model.unwrap().meshes.iter()
+                for model in models.unwrap().values()
                 {
-                        // Set the transform bind group for THIS mesh
-                        render_pass.set_bind_group(1, &mesh.transform_bind_group, &[]);
+                        for mesh in model.meshes.iter()
+                        {
+                                // Set the transform bind group for THIS mesh
+                                render_pass.set_bind_group(1, &mesh.transform_bind_group, &[]);
 
-                        // Set the material bind group for THIS mesh's material
-                        let material_index = mesh.material;
-                        render_pass.set_bind_group(
-                                2,
-                                &obj_model.unwrap().materials[material_index].material_bind_group,
-                                &[],
-                        );
+                                // Set the material bind group for THIS mesh's material
+                                let material_index = mesh.material;
+                                render_pass.set_bind_group(
+                                        2,
+                                        &model.materials[material_index].material_bind_group,
+                                        &[],
+                                );
 
-                        // Draw the mesh
-                        render_pass.draw_mesh(mesh);
+                                // Draw the mesh
+                                render_pass.draw_mesh(mesh);
+                        }
                 }
         }
 }

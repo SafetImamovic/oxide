@@ -72,7 +72,7 @@ impl Camera
                                                         ui.label("Speed");
                                                         ui.add(egui::Slider::new(
                                                                 &mut self.config.speed,
-                                                                0.0..=10.0,
+                                                                0.0..=50.0,
                                                         )
                                                         .step_by(0.1));
                                                         ui.end_row();
@@ -204,7 +204,7 @@ impl Camera
         {
                 let core = CameraCore::new((0.0, 5.0, 10.0), Deg(-90.0), Deg(-20.0));
 
-                let projection = Projection::new(Deg(60.0), 0.1, 100.0);
+                let projection = Projection::new(Deg(60.0), 0.1, 1000.0);
 
                 let config = CameraConfig::default();
 

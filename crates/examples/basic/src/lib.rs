@@ -1,4 +1,3 @@
-use oxide::geometry::mesh::{Mesh, Primitive};
 use oxide_macro::oxide_main;
 use winit::keyboard::KeyCode;
 
@@ -10,10 +9,12 @@ pub fn run() -> anyhow::Result<()>
         let resources = oxide::resources::load_resources();
         log::info!("Loading Resources from: {}", resources.display());
 
-        let engine = oxide::engine::EngineBuilder::new()
+        let mut engine = oxide::engine::EngineBuilder::new()
                 .with_debug_ui()
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
+
+        engine.add_obj_model("dodecahedron", "dodecahedron.glb");
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 

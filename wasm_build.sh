@@ -45,7 +45,7 @@ for crate_path in "$CRATES_DIR"/*/; do
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Example | $crate_name</title>
+    <title>Primjer | $crate_name</title>
     <style>
         canvas {
           background-color: black;

@@ -41,7 +41,7 @@ impl Texture
                 queue.write_texture(
                         texture.as_image_copy(),
                         &rgba,
-                        wgpu::ImageDataLayout {
+                        wgpu::TexelCopyBufferLayout {
                                 offset: 0,
                                 bytes_per_row: Some(4), // 4 bytes per row (RGBA8)
                                 rows_per_image: Some(1),

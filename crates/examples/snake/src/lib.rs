@@ -1,4 +1,3 @@
-use oxide::geometry::mesh::{Mesh, Primitive};
 use oxide_macro::oxide_main;
 use winit::keyboard::KeyCode;
 

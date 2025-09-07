@@ -1,4 +1,3 @@
-use oxide::geometry::mesh::{Mesh, Primitive};
 use oxide_macro::oxide_main;
 use winit::keyboard::KeyCode;
 
@@ -15,7 +14,7 @@ pub fn run() -> anyhow::Result<()>
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 
-        engine.add_obj_model("free_1975_porsche_911_930_turbo.glb");
+        engine.add_obj_model("auto", "free_1975_porsche_911_930_turbo.glb");
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 

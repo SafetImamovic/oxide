@@ -14,7 +14,7 @@ pub fn run() -> anyhow::Result<()>
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 
-        engine.add_obj_model("scene.glb");
+        engine.add_obj_model("mc_forest", "forest_2_by_creepercoastal.glb");
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 

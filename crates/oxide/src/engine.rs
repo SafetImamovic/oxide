@@ -18,8 +18,8 @@
 //! and providing a static `setup` function that returns an [`EngineRunner`].
 //! This setup function is registered internally and later executed by [`run`].
 
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
@@ -144,7 +144,7 @@ pub struct Engine
 
         pub config: Config,
 
-        pub model_name: String,
+        pub model_map: HashMap<String, String>,
 
         // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
@@ -179,7 +179,7 @@ impl Engine
                         &state.pipeline_manager,
                         &state.camera.get_bind_group(&state.device),
                         &state.depth_texture,
-                        Some(&state.obj_model),
+                        Some(&state.models),
                 );
 
                 if self.config.enable_debug
@@ -203,10 +203,11 @@ impl Engine
 
         pub fn add_obj_model(
                 &mut self,
-                name: impl Into<String>,
+                handle: impl Into<String>,
+                file_name: impl Into<String>,
         )
         {
-                self.model_name = name.into();
+                self.model_map.insert(handle.into(), file_name.into());
         }
 
         fn resize(&mut self)
@@ -310,7 +311,7 @@ impl Engine
 #[derive(Debug)]
 pub struct EngineState
 {
-        pub obj_model: Model,
+        pub models: HashMap<String, Model>,
 
         pub instance: wgpu::Instance,
 
@@ -355,7 +356,7 @@ impl EngineState
         /// creation fails.
         pub async fn new(
                 window: Arc<Window>,
-                model_name: &str,
+                model_map: HashMap<String, String>,
         ) -> Result<EngineState>
         {
                 let instance = EngineBuilder::instance();
@@ -393,49 +394,27 @@ impl EngineState
                         "depth_texture",
                 );
 
-                let texture_bind_group_layout =
-                        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                                entries: &[
-                                        wgpu::BindGroupLayoutEntry {
-                                                binding: 0,
-                                                visibility: wgpu::ShaderStages::FRAGMENT,
-                                                ty: wgpu::BindingType::Texture {
-                                                        multisampled: false,
-                                                        view_dimension:
-                                                                wgpu::TextureViewDimension::D2,
-                                                        sample_type:
-                                                                wgpu::TextureSampleType::Float {
-                                                                        filterable: true,
-                                                                },
-                                                },
-                                                count: None,
-                                        },
-                                        wgpu::BindGroupLayoutEntry {
-                                                binding: 1,
-                                                visibility: wgpu::ShaderStages::FRAGMENT,
-                                                ty: wgpu::BindingType::Sampler(
-                                                        wgpu::SamplerBindingType::Filtering,
-                                                ),
-                                                count: None,
-                                        },
-                                ],
-                                label: Some("texture_bind_group_layout"),
-                        });
+                let mut models = HashMap::new();
 
-                let obj_model = crate::resources::load_model(
-                        model_name,
-                        Some("de_dust2"),
-                        &device,
-                        &queue,
-                        &create_material_bind_group_layout(&device),
-                        &create_transform_bind_group_layout(&device),
-                )
-                .await?;
+                for (handle, file_name) in model_map.iter()
+                {
+                        let model = crate::resources::load_model(
+                                file_name,
+                                Some("de_dust2"),
+                                &device,
+                                &queue,
+                                &create_material_bind_group_layout(&device),
+                                &create_transform_bind_group_layout(&device),
+                        )
+                        .await?;
+
+                        models.insert(handle.to_string(), model);
+                }
 
                 Ok(EngineState {
                         instance,
                         camera,
-                        obj_model,
+                        models,
                         render_graph,
                         pipeline_manager,
                         adapter,
@@ -459,22 +438,7 @@ impl EngineState
 
         pub fn build_pipelines(&mut self)
         {
-                // Create transform bind group layout
-                let transform_bind_group_layout =
-                        self.device
-                                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                                        entries: &[wgpu::BindGroupLayoutEntry {
-                                                binding: 0,
-                                                visibility: wgpu::ShaderStages::VERTEX,
-                                                ty: wgpu::BindingType::Buffer {
-                                                        ty: wgpu::BufferBindingType::Uniform,
-                                                        has_dynamic_offset: false,
-                                                        min_binding_size: None,
-                                                },
-                                                count: None,
-                                        }],
-                                        label: Some("transform_bind_group_layout"),
-                                });
+                let transform_bind_group_layout = create_transform_bind_group_layout(&self.device);
 
                 let material_bind_group_layout = create_material_bind_group_layout(&self.device);
 
@@ -585,20 +549,7 @@ impl EngineState
 
                                 // Create transform bind group layout
                                 let transform_bind_group_layout =
-                        self.device
-                                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                                        entries: &[wgpu::BindGroupLayoutEntry {
-                                                binding: 0,
-                                                visibility: wgpu::ShaderStages::VERTEX,
-                                                ty: wgpu::BindingType::Buffer {
-                                                        ty: wgpu::BufferBindingType::Uniform,
-                                                        has_dynamic_offset: false,
-                                                        min_binding_size: None,
-                                                },
-                                                count: None,
-                                        }],
-                                        label: Some("transform_bind_group_layout"),
-                                });
+                                        create_transform_bind_group_layout(&self.device);
 
                                 let material_bind_group_layout =
                                         create_material_bind_group_layout(&self.device);
@@ -707,22 +658,21 @@ impl ApplicationHandler<EngineState> for Engine
 
                 self.window = Some(window.clone());
 
+                let model_map = self.model_map.clone();
+
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                        self.state = Some(pollster::block_on(EngineState::new(
-                                window,
-                                self.model_name.as_str(),
-                        ))
-                        .unwrap_or_else(|e| {
-                                log::error!("Failed to initialize EngineState: {:?}", e);
-                                panic!("Failed to initialize EngineState");
-                        }));
+                        self.state = Some(pollster::block_on(EngineState::new(window, model_map))
+                                .unwrap_or_else(|e| {
+                                        log::error!("Failed to initialize EngineState: {:?}", e);
+                                        panic!("Failed to initialize EngineState");
+                                }));
                 }
-
-                let model_name = self.model_name.clone();
 
                 #[cfg(target_arch = "wasm32")]
                 {
+                        let model_name = self.model_name.clone();
+
                         // In WASM builds, async tasks must be spawned without blocking.
                         #[cfg(target_arch = "wasm32")]
                         if let Some(proxy) = self.proxy.take()
@@ -757,8 +707,6 @@ impl ApplicationHandler<EngineState> for Engine
 
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                        let state = self.state.as_mut().unwrap();
-
                         let state = self.state.as_mut().unwrap();
 
                         state.build_pipelines();
@@ -844,8 +792,6 @@ impl ApplicationHandler<EngineState> for Engine
                                                 let now = instant::Instant::now();
 
                                                 self.last_render_time = now - last_render_time;
-
-                                                log::info!("FPS: {:?}", self.last_render_time);
                                         }
                                         Err(e) =>
                                         {
@@ -992,13 +938,15 @@ impl EngineBuilder
 
                 crate::resources::load_resources();
 
+                let model_map = HashMap::new();
+
                 Self {
                         engine: Engine {
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 last_render_time: Duration::from_secs_f32(0.0),
-                                model_name: String::from(""),
                                 config,
+                                model_map,
                                 state: None,
                                 time: None,
                                 window: None,
