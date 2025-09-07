@@ -50,7 +50,31 @@ pub fn resource_path(
                 return file_name.to_string();
         }
 
-        format!("/resources/{}", file_name)
+        let window = web_sys::window().expect("no global `window` exists");
+
+        let location = window.location();
+
+        let hostname = location.hostname().unwrap_or_default();
+
+        let is_github_pages = hostname.contains("github.io");
+
+        let pathname = location.pathname().unwrap_or_default();
+
+        let crate_name = pathname.split('/').nth(2).unwrap_or("").to_string();
+
+        if crate_name.is_empty()
+        {
+                panic!("No crate name found!");
+        }
+
+        let mut origin = "docs";
+
+        if is_github_pages
+        {
+                origin = "oxide";
+        }
+
+        format!("/{}/{}/resources/{}", origin, crate_name, file_name)
 }
 
 pub fn resource_path_relative(
