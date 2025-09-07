@@ -75,6 +75,7 @@ pub fn resource_path_relative(
         base_dir.join(file_name)
 }
 
+/// Main function that is responsible for loading in 3D Models.
 pub async fn load_model(
         file_name: &str,
         crate_name: Option<&str>,
@@ -92,7 +93,7 @@ pub async fn load_model(
         #[cfg(target_arch = "wasm32")]
         let path = resource_path(file_name, crate_name);
 
-        let (meshes, materials) = if file_name.ends_with(".obj")
+        let (meshes, materials, images) = if file_name.ends_with(".obj")
         {
                 anyhow::bail!("OBJ format not supported yet.");
         }
@@ -108,6 +109,7 @@ pub async fn load_model(
         Ok(Model::from_data(
                 meshes,
                 materials,
+                images,
                 device,
                 queue,
                 material_bind_group_layout,
@@ -135,7 +137,7 @@ pub fn create_transform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGr
 pub async fn load_gltf(
         path: &str,
         crate_name: Option<&str>,
-) -> anyhow::Result<(Vec<MeshData>, Vec<MaterialData>)>
+) -> anyhow::Result<(Vec<MeshData>, Vec<MaterialData>, Vec<gltf::image::Data>)>
 {
         log::info!("Loading 3D model from: {:?}", path);
 
@@ -150,26 +152,9 @@ pub async fn load_gltf(
 
         println!("Found {} embedded images", images.len());
 
-        for (_i, image) in images.iter().enumerate()
-        {
-                let _format = match image.format
-                {
-                        gltf::image::Format::R8 => "R8",
-                        gltf::image::Format::R8G8 => "R8G8",
-                        gltf::image::Format::R8G8B8 => "R8G8B8",
-                        gltf::image::Format::R8G8B8A8 => "R8G8B8A8",
-                        gltf::image::Format::R16 => "R16",
-                        gltf::image::Format::R16G16 => "R16G16",
-                        gltf::image::Format::R16G16B16 => "R16G16B16",
-                        gltf::image::Format::R16G16B16A16 => "R16G16B16A16",
-                        _ => "unknown",
-                };
-        }
-
         let mut meshes = Vec::new();
         let mut materials = Vec::new();
 
-        // Load materials first
         for mat in doc.materials()
         {
                 let name = mat.name().unwrap_or("unnamed").to_string();
@@ -177,39 +162,34 @@ pub async fn load_gltf(
 
                 println!("Processing material: {}", name);
 
-                // Handle texture loading differently for WASM vs native
-                let base_color_texture = pbr.base_color_texture().map(|tex_info| {
-                        let texture_index = tex_info.texture().index();
-                        let tex_coord = tex_info.tex_coord();
+                // Extract texture indices from the GLTF material
+                let base_color_texture_index = pbr
+                        .base_color_texture()
+                        .map(|tex_info| tex_info.texture().index());
 
-                        println!(
-                                "  Material '{}' uses texture index: {}, UV set: {}",
-                                name, texture_index, tex_coord
-                        );
+                let metallic_roughness_texture_index = pbr
+                        .metallic_roughness_texture()
+                        .map(|tex_info| tex_info.texture().index());
 
-                        // For WASM, we'll handle texture loading separately
-                        format!("{name}_baseColor.png")
-                });
-
-                if base_color_texture.is_none()
-                {
-                        println!("Material '{}' has no base color texture", name);
-                }
+                let normal_texture_index = mat
+                        .normal_texture()
+                        .map(|tex_info| tex_info.texture().index());
 
                 materials.push(MaterialData {
                         name: name.clone(),
-                        base_color_texture,
+                        base_color_texture: None, // This can probably be removed
                         base_color_factor: pbr.base_color_factor(),
                         metallic_factor: pbr.metallic_factor(),
                         roughness_factor: pbr.roughness_factor(),
-                        // These might not work in WASM without additional handling:
-                        diffuse_texture: None,
-                        normal_texture: None,
-                        metallic_roughness_texture: None,
+                        base_color_texture_index, // Now this will have the actual index!
+                        normal_texture_index,     // Now this will have the actual index!
+                        diffuse_texture: None,    // This can probably be removed
+                        normal_texture: None,     // This can probably be removed
+                        metallic_roughness_texture: None, // This can probably be removed
+                        metallic_roughness_texture_index, // Now this will have the actual index!
                 });
         }
 
-        // Process all scenes and their node hierarchies
         for scene in doc.scenes()
         {
                 for node in scene.nodes()
@@ -218,7 +198,7 @@ pub async fn load_gltf(
                 }
         }
 
-        Ok((meshes, materials))
+        Ok((meshes, materials, images))
 }
 
 async fn load_glb(

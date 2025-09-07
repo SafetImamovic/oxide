@@ -9,6 +9,9 @@ pub struct MaterialData
         pub base_color_factor: [f32; 4],
         pub metallic_factor: f32,
         pub roughness_factor: f32,
+        pub base_color_texture_index: Option<usize>,
+        pub normal_texture_index: Option<usize>,
+        pub metallic_roughness_texture_index: Option<usize>,
 }
 
 impl Default for MaterialData
@@ -24,6 +27,9 @@ impl Default for MaterialData
                         base_color_factor: [1.0, 1.0, 1.0, 1.0],
                         metallic_factor: 1.0,
                         roughness_factor: 1.0,
+                        base_color_texture_index: None,
+                        normal_texture_index: None,
+                        metallic_roughness_texture_index: None,
                 }
         }
 }

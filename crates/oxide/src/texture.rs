@@ -1,6 +1,6 @@
-use image::GenericImageView;
+use image::{ImageBuffer, Rgba};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Texture
 {
         pub texture: wgpu::Texture,
@@ -71,33 +71,38 @@ impl Texture
         pub fn from_bytes(
                 device: &wgpu::Device,
                 queue: &wgpu::Queue,
-                bytes: &[u8],
+                img: &gltf::image::Data,
                 label: &str,
         ) -> anyhow::Result<Self>
         {
-                let img = image::load_from_memory(bytes)?;
-                Self::from_image(device, queue, &img, label)
+                Self::from_image(device, queue, img, label)
+                        .map_err(|e| anyhow::anyhow!("let texture = ...{}", e))
         }
 
         pub fn from_image(
                 device: &wgpu::Device,
                 queue: &wgpu::Queue,
-                img: &image::DynamicImage,
+                img: &gltf::image::Data,
                 label: &str,
         ) -> anyhow::Result<Self>
         {
-                let rgba = img.to_rgba8();
-                let dims = img.dimensions();
+                let rgba: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(img.width, img.height);
 
                 let size = wgpu::Extent3d {
-                        width: dims.0,
-                        height: dims.1,
+                        width: img.width,
+                        height: img.height,
                         depth_or_array_layers: 1,
                 };
 
                 let texture = Self::create_texture(&device, label, size);
 
-                Self::write_texture_to_queue(&queue, &texture, dims, &rgba, size);
+                Self::write_texture_to_queue(
+                        &queue,
+                        &texture,
+                        (img.width, img.height),
+                        &rgba,
+                        size,
+                );
 
                 let view = Self::create_view(&texture);
 
@@ -132,7 +137,7 @@ impl Texture
                 queue: &wgpu::Queue,
                 texture: &wgpu::Texture,
                 dims: (u32, u32),
-                rgba: &image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
+                rgba: &ImageBuffer<Rgba<u8>, Vec<u8>>,
                 size: wgpu::Extent3d,
         )
         {

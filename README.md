@@ -1,33 +1,52 @@
 # Oxide Render Engine
 
-Oxide is a **web-based 3D rendering engine** written in **Rust**, powered by **[WGPU](https://github.com/gfx-rs/wgpu)** and **[WebGPU](https://www.w3.org/TR/webgpu/)**.
-It’s designed as part of a Bachelor's thesis in **Computer Graphics** and focuses on providing a modern, high-performance rendering pipeline that works natively and in the browser via **[WASM](https://webassembly.org/)**.
+Oxide is a **web-based 3D rendering engine** written in **Rust**, powered by **[WGPU](https://github.com/gfx-rs/wgpu)**
+and **[WebGPU](https://www.w3.org/TR/webgpu/)**.
+It’s designed as part of a Bachelor's thesis in **Computer Graphics** and focuses on providing a modern,
+high-performance rendering pipeline that works natively and in the browser via **[WASM](https://webassembly.org/)**.
 
----
+## Features
 
-## ✨ Features
+* Built with **Rust** and **wgpu** for cross-platform GPU rendering
+* Compiles to **WebAssembly** for browser-based applications
+* Integrated **winit** window handling for native builds
+* Logging with `log::info!` (currently prints pressed keys to the browser console)
+* Easy development workflow for both **native** and **WASM** targets
 
-* 🚀 Built with **Rust** and **wgpu** for cross-platform GPU rendering
-* 🌐 Compiles to **WebAssembly** for browser-based applications
-* 🖼️ Integrated **winit** window handling for native builds
-* 🧩 Structured for future scalability (ECS, multi-threaded execution planned)
-* 🛠️ Logging with `log::info!` (currently prints pressed keys to the browser console)
-* 🔧 Easy development workflow for both **native** and **WASM** targets
+## Examples
 
----
+[WASM Examples](https://safetimamovic.github.io/oxide/)
 
-## 📦 Project Structure
+### Screenshots
 
-```
-oxide/
-├── src/               # Engine source code
-├── Cargo.toml         # Rust manifest
-├── Cargo.lock         # Dependency lock file
-├── pkg/               # Generated WASM package (after build, not version controlled)
-└── static/            # HTML index file for browser demo
+```bash
+cargo run --package auto --release
 ```
 
----
+![free-1975-porsche-911-930-turbo by Lionsharp Studios](docs/images/auto.png)
+![](docs/images/auto_vertex_mode.png)
+
+Model: _free-1975-porsche-911-930-turbo_ by **Lionsharp Studios**
+[sketchfab.com](https://sketchfab.com/3d-models/free-1975-porsche-911-930-turbo-8568d9d14a994b9cae59499f0dbed21e)
+
+```bash
+cargo run --package de_dust2 --release
+```
+
+![](docs/images/dust2.png)
+
+Model: _de-dust2-cs-map_ by **pancakesbassoondonut**
+[sketchfab.com](https://sketchfab.com/3d-models/de-dust2-cs-map-056008d59eb849a29c0ab6884c0c3d87)
+
+```bash
+cargo run --package mc --release
+```
+
+![](docs/images/mc.png)
+![](docs/images/mc_vertex_mode.png)
+
+Model: _forest-2-by-creepercoastal_ by **CreeperCoastal**
+[sketchfab.com](https://sketchfab.com/3d-models/forest-2-by-creepercoastal-1435a8422df5458196ec7b36fc556248)
 
 ## 🚀 Getting Started
 
@@ -38,21 +57,25 @@ git clone https://github.com/SafetImamovic/oxide.git
 cd oxide
 ```
 
----
-
 ### **2. Run natively**
 
 Enable info-level logging and run:
 
 ```bash
-RUST_LOG=info cargo run
+RUST_LOG=info cargo run --package auto --release
 ```
 
-This launches the engine in a native window using `winit`.
-
----
+This launches the `Auto` example in a native window using `winit`.
 
 ### **3. Build for WebAssembly**
+
+To build the examples into a `doc/` directory run:
+
+```bash
+./wasm_build.sh
+```
+
+This builds the `wasm` binaries, copies the `.glb` resources directory and builds `index.html`-s per example.
 
 When targeting browsers, randomness support must be configured explicitly for `getrandom`.
 Use the following command to build:
@@ -62,49 +85,39 @@ RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web --no-
 ```
 
 This generates the `pkg/` folder containing the `.wasm` and JS bindings.
-# Oxide Render Engine
-
-A modern, Rust-based rendering engine using wgpu, winit, and egui.
-
-## Features
-
-- Modular render pass system with a flexible render graph
-- Support for different fill modes (Fill, Wireframe, Vertex)
-- Depth buffer support for 3D rendering
-- Camera system with perspective projection
-- Cross-platform support (native and WebAssembly)
-- Integrated debug UI with egui
-
-## Architecture
-
-The engine is built around these key components:
-
-- **EngineState**: Manages GPU resources and rendering state
-- **RenderGraph**: Orchestrates render passes in a flexible pipeline
-- **RenderPass**: Interface for implementing different rendering stages
-- **PipelineManager**: Handles creation and management of rendering pipelines
-- **Camera**: 3D perspective camera system
 
 ## Getting Started
 
 ```rust
-fn main() -> anyhow::Result<()> {
-    // Create the engine with default settings
-    let engine = oxide::engine::EngineBuilder::new()
+#[oxide_main]
+pub fn run() -> anyhow::Result<()>
+{
+    oxide::utils::bootstrap::show_start_message();
+
+    let resources = oxide::resources::load_resources();
+    log::info!("Loading Resources from: {}", resources.display());
+
+    let mut engine = oxide::engine::EngineBuilder::new()
+        .with_debug_ui()
+        .with_toggle(KeyCode::Tab)?
         .build()?;
 
-    // Create a runner to execute the engine
+    engine.add_obj_model("auto", "free_1975_porsche_911_930_turbo.glb");
+
     let runner = oxide::engine::EngineRunner::new(engine)?;
 
-    // Run the engine
-    runner.run()
+    runner.run()?;
+
+    oxide::utils::exit::show_exit_message();
+
+    Ok(())
 }
+
 ```
 
 ## License
 
 MIT
----
 
 ### **4. Serve locally with Python**
 
@@ -114,43 +127,13 @@ To bypass CORS restrictions when testing in the browser:
 python -m http.server 8080
 ```
 
-Then open [http://localhost:8080/static/](http://localhost:8080/static/) in your browser.
-
----
-
-## 🧭 Controls
-
-* **Keyboard Input**: Key presses are currently logged to the **browser console** (`log::info!`).
-* Escape (`ESC`) closes the window in native builds.
-
----
+Then open [http://localhost:8080/docs/](http://localhost:8080/docs/) in your browser.
 
 ## 🔮 Roadmap
 
-* [ ] Basic 3D rendering pipeline
-* [ ] Camera controls and transformations
-* [ ] Scene graph management
-* [ ] Asset loading (models, textures)
-* [ ] Multi-threaded task scheduling for physics and async asset loading
-* [ ] WebGPU shader management
-
----
-
-## 🛠️ Development Notes
-
-* Built with Rust **edition 2024**
-* Uses:
-
-  * [`wgpu`](https://github.com/gfx-rs/wgpu) – GPU abstraction layer
-  * [`winit`](https://github.com/rust-windowing/winit) – Window management
-  * [`anyhow`](https://crates.io/crates/anyhow) – Error handling
-  * [`log`](https://crates.io/crates/log) + `env_logger` – Logging
-  * [`console_log`](https://crates.io/crates/console_log) – Browser console logs for WASM
-
----
-
-## 📄 License
-
-TODO!
-
-
+* [x] Basic 3D rendering pipeline
+* [x] Camera controls and transformations
+* [x] Render pass graph management
+* [x] Asset loading (models, textures via `gltf`)
+* [x] WebGPU shader management
+* [ ] Lighting

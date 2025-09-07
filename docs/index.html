@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="hr">
 <head>
     <meta charset="UTF-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
@@ -7,6 +7,9 @@
     <title>WebGPU Primjeri</title>
     <link href="https://fonts.googleapis.com" rel="preconnect"/>
     <link crossorigin href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link crossorigin="anonymous" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css"
+          integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw=="
+          referrerpolicy="no-referrer" rel="stylesheet"/>
     <link
             href="https://fonts.googleapis.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
             rel="stylesheet"
@@ -16,23 +19,227 @@
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: "Cascadia Code", sans-serif;
+            font-family: "Cascadia Code", monospace;
             font-optical-sizing: auto;
             font-style: normal;
+        }
+
+        body {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            line-height: 1.6;
+            color: #d3d3d3;
+            background-color: #1f1f1f;
+        }
+
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: #cecece;
+        }
+
+        .subtitle {
+            color: #bbbbbb;
+            font-size: 1.1rem;
+        }
+
+        .examples-list {
+        }
+
+        .examples-list li {
+            display: flex;
+            justify-content: space-between;
+            counter-increment: example-counter;
+            background: #2f2f2f;
+            margin-bottom: 1rem;
+            padding: 1.2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border-left: 4px solid #939394;
+            transition: transform 0.2s ease;
+        }
+
+        .examples-list li img {
+            max-width: 200px;
+            border-radius: 8px;
+            align-self: end;
+        }
+
+        .examples-list li:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+
+        .example-link {
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: #d9d9d9;
+            text-decoration: none;
+            margin-right: 0.5rem;
+        }
+
+        .example-link:hover {
+            color: #3498db;
+            text-decoration: underline;
+        }
+
+        .creator {
+            display: block;
+            margin: 0.5rem 0;
+            color: #d3d3d3;
+            font-size: 0.95rem;
+        }
+
+        .sketchfab-link {
+            color: #3498db;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .sketchfab-link:hover {
+            text-decoration: underline;
+        }
+
+        .todo {
+            display: inline-block;
+            background: #ffc107;
+            color: #212529;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+            font-style: normal;
+        }
+
+        .thesis-info {
+            padding: 1.5rem;
+        }
+
+        .thesis-title {
+            font-weight: bold;
+            color: #dadada;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .university-info {
+            color: #6c757d;
+            font-size: 0.95rem;
+        }
+
+        .university-link {
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        .university-link:hover {
+            text-decoration: underline;
+        }
+
+        .example-list-inner {
+            justify-self: start !important;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .examples-list li {
+                padding: 1rem;
+            }
         }
     </style>
 </head>
 <body>
-<h1>WebGPU Primjeri</h1>
-<span>F12 -> konzola za dodatne informacije.</span>
-<ol>
-    <li><a href="./basic/index.html">Basic</a></li>
-    <li><a href="./cube/index.html">Cube</a></li>
-    <li><a href="./snake/index.html">Snake</a></li>
-    <li><a href="./de_dust2/index.html">de_dust2</a></li>
-    <li><a href="./auto/index.html">Auto</a></li>
-    <li><a href="/">Pong</a></li>
-    <li><a href="/">Conways Game of Life</a></li>
-</ol>
+<header>
+    <h1>WebGPU Primjeri</h1>
+    <span class="subtitle">F12 → konzola za dodatne informacije</span>
+    <a href="https://github.com/SafetImamovic/oxide"
+       style="text-decoration: none;  font-weight: bold; margin-left: 20px;"
+       target="_blank">
+        GitHub Repozitorij <i class="fa-brands fa-github"></i>
+    </a>
+
+    <div class="thesis-info">
+        <p class="personal-intro">
+            Ovo su primjeri iz render engina nazvan <strong>Oxide</strong> koji je napravljen u sklopu mog diplomskog
+            rada:
+        </p>
+        <div class="thesis-title">
+            "IMPLEMENTACIJA 3D RENDER ENGINE-A U RUST PROGRAMSKOM JEZIKU PRIMJENOM WEBGPU-A"
+        </div>
+        <div class="university-info">
+            Univerzitet u Zenici, Politehnički fakultet<br>
+            Softversko inženjerstvo: <a class="university-link" href="https://ptf.unze.ba/"
+                                        target="_blank">ptf.unze.ba</a>
+        </div>
+    </div>
+</header>
+
+<ul class="examples-list">
+    <li>
+        <div class="example-list-inner">
+            <a class="example-link" href="./basic/index.html">Dodekahedron <i class="fa-solid fa-link"></i></a>
+            <span class="creator">Kreator Modela: chandlerklebs</span>
+            <a class="sketchfab-link"
+               href="https://sketchfab.com/3d-models/dodecahedron-fe85107a4491481f8b176f85df856365"
+               target="_blank">sketchfab.com</a>
+        </div>
+
+        <img alt="Screenshot" src="./images/dodecahedron.png">
+    </li>
+    <li>
+        <div class="example-list-inner">
+            <a class="example-link" href="./de_dust2/index.html">de_dust2 <i class="fa-solid fa-link"></i></a>
+            <span class="creator">Kreator Modela: pancakesbassoondonut</span>
+            <a class="sketchfab-link"
+               href="https://sketchfab.com/3d-models/de-dust2-cs-map-056008d59eb849a29c0ab6884c0c3d87" target="_blank">sketchfab.com</a>
+        </div>
+
+        <img alt="Screenshot" src="./images/dust2.png">
+    </li>
+    <li>
+        <div class="example-list-inner">
+            <a class="example-link" href="./mc/index.html">Minecraft <i class="fa-solid fa-link"></i></a>
+            <span class="creator">Kreator Modela: CreeperCoastal</span>
+            <a class="sketchfab-link"
+               href="https://sketchfab.com/3d-models/forest-2-by-creepercoastal-1435a8422df5458196ec7b36fc556248"
+               target="_blank">sketchfab.com</a>
+        </div>
+
+        <img alt="Screenshot" src="./images/mc.png">
+    </li>
+    <li>
+        <div class="example-list-inner">
+            <a class="example-link" href="./auto/index.html">Auto <i class="fa-solid fa-link"></i></a>
+            <span class="creator">Kreator Modela: Lionsharp Studios</span>
+            <a class="sketchfab-link"
+               href="https://sketchfab.com/3d-models/free-1975-porsche-911-930-turbo-8568d9d14a994b9cae59499f0dbed21e"
+               target="_blank">sketchfab.com</a>
+        </div>
+
+        <img alt="Screenshot" src="./images/auto.png">
+    </li>
+    <li>
+        <a class="example-link" href="./snake/index.html">Snake</a>
+        <span class="todo">TODO!</span>
+    </li>
+    <li>
+        <a class="example-link" href="./pong/index.html">Pong</a>
+        <span class="todo">TODO!</span>
+    </li>
+    <li>
+        <a class="example-link" href="./conway/index.html">Conway's Game of Life</a>
+        <span class="todo">TODO!</span>
+    </li>
+</ul>
 </body>
 </html>

@@ -1,10 +1,7 @@
 use crate::geometry::mesh::{Mesh, MeshData};
 use crate::material::{MaterialData, MaterialProperties};
-use crate::resources::resource_path;
 use std::ops::Range;
-use std::path::PathBuf;
 use wgpu::util::DeviceExt;
-use wgpu::BindGroupDescriptor;
 
 pub trait Vertex
 {
@@ -60,141 +57,203 @@ impl Model
         pub fn from_data(
                 meshes: Vec<MeshData>,
                 materials: Vec<MaterialData>,
+                images: Vec<gltf::image::Data>,
                 device: &wgpu::Device,
                 queue: &wgpu::Queue,
                 material_bind_group_layout: &wgpu::BindGroupLayout,
                 transform_bind_group_layout: &wgpu::BindGroupLayout,
         ) -> Self
         {
+                // Convert GLB images to GPU textures
+                let gpu_textures: Vec<crate::texture::Texture> = images
+                .iter()
+                .enumerate()
+                .map(|(index, image)| {
+                    log::info!("IMAGE {} INFO: {:?} ({}x{})", index, image.format, image.width, image.height);
+
+                    let size = wgpu::Extent3d {
+                        width: image.width,
+                        height: image.height,
+                        depth_or_array_layers: 1,
+                    };
+
+                    // Determine bytes per pixel and convert if necessary
+                    let (final_pixels, bytes_per_pixel, target_format) = match image.format {
+                        gltf::image::Format::R8G8B8A8 => {
+                            // Already RGBA, use as-is
+                            (image.pixels.clone(), 4, wgpu::TextureFormat::Rgba8UnormSrgb)
+                        }
+                        gltf::image::Format::R8G8B8 => {
+                            // Convert RGB to RGBA
+                            let mut rgba_data = Vec::with_capacity(image.pixels.len() * 4 / 3);
+                            for chunk in image.pixels.chunks_exact(3) {
+                                rgba_data.extend_from_slice(chunk);
+                                rgba_data.push(255); // Add full alpha
+                            }
+                            (rgba_data, 4, wgpu::TextureFormat::Rgba8UnormSrgb)
+                        }
+                        gltf::image::Format::R8G8 => {
+                            // R8G8 format (2 bytes per pixel) - use appropriate texture format
+                            // Convert to RGBA if needed, or use a two-channel format
+                            let mut rgba_data = Vec::with_capacity(image.pixels.len() * 2);
+                            for chunk in image.pixels.chunks_exact(2) {
+                                rgba_data.extend_from_slice(chunk);
+                                rgba_data.push(0); // Add blue channel
+                                rgba_data.push(255); // Add alpha channel
+                            }
+                            (rgba_data, 4, wgpu::TextureFormat::Rgba8UnormSrgb)
+                        }
+                        _ => {
+                            log::warn!("Unknown image format {:?}, defaulting to RGBA", image.format);
+                            (image.pixels.clone(), 4, wgpu::TextureFormat::Rgba8UnormSrgb)
+                        }
+                    };
+
+                    let texture = device.create_texture(&wgpu::TextureDescriptor {
+                        label: Some(&format!("GLB Texture {}", index)),
+                        size,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: target_format,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                        view_formats: &[],
+                    });
+
+                    // Calculate bytes per row with proper alignment
+                    let unpadded_bytes_per_row: usize = bytes_per_pixel as usize * image.width as usize;
+                    let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+                    let padded_bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
+
+                    log::debug!("Texture {}: {}x{}, bpp: {}, unpadded: {}, padded: {}",
+            index, image.width, image.height, bytes_per_pixel,
+            unpadded_bytes_per_row, padded_bytes_per_row);
+
+                    // Verify the final data size matches expectations
+                    let expected_size = unpadded_bytes_per_row * image.height as usize;
+                    assert_eq!(
+                        final_pixels.len(),
+                        expected_size,
+                        "Image {}: Expected {} bytes, got {} bytes",
+                        index, expected_size, final_pixels.len()
+                    );
+
+                    // If padding is needed, create padded data
+                    let upload_data = if padded_bytes_per_row > unpadded_bytes_per_row {
+                        let mut padded_data = Vec::with_capacity(padded_bytes_per_row * image.height as usize);
+
+                        for y in 0..image.height as usize {
+                            let row_start = y * unpadded_bytes_per_row;
+                            let row_end = row_start + unpadded_bytes_per_row;
+
+                            // Add the actual row data
+                            padded_data.extend_from_slice(&final_pixels[row_start..row_end]);
+
+                            // Add padding zeros
+                            padded_data.resize(padded_data.len() + (padded_bytes_per_row - unpadded_bytes_per_row), 0);
+                        }
+                        padded_data
+                    } else {
+                        final_pixels
+                    };
+
+                    queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                            texture: &texture,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        &upload_data,
+                        wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(padded_bytes_per_row as u32),
+                            rows_per_image: Some(image.height),
+                        },
+                        size,
+                    );
+
+                    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+                    let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
+
+                    crate::texture::Texture {
+                        texture,
+                        view,
+                        sampler,
+                    }
+                })
+                .collect();
+
                 // Upload materials
                 let gpu_materials = materials
-                        .into_iter()
-                        .map(|mat| {
-                                // If the material has a texture path, load it, otherwise use a
-                                // dummy 1x1 texture
-                            let base_color_texture = if let Some(ref path) = mat.base_color_texture {
-                                println!("Attempting to load texture: {}", path);
-                                let full_path = resource_path(PathBuf::from(format!("textures\\{}", path)).to_str().unwrap(), Some("de_dust2"));
-                                println!("Full path: {:?}", full_path);
+        .into_iter()
+        .map(|mat| {
+            // Choose base color texture from GLB images
+            let base_color_texture = mat
+                .base_color_texture_index
+                .and_then(|idx| gpu_textures.get(idx).cloned())
+                .unwrap_or_else(|| crate::texture::Texture::create_dummy(device, queue));
 
-                                #[cfg(not(target_arch = "wasm32"))]
-                                if !full_path.exists() {
-                                    println!("❌ TEXTURE FILE NOT FOUND: {:?}", full_path);
-                                    crate::texture::Texture::create_dummy(device, queue)
-                                } else {
-                                    match crate::texture::Texture::from_bytes(
-                                        device,
-                                        queue,
-                                        &std::fs::read(&full_path).unwrap(),
-                                        &full_path.to_string_lossy(),
-                                    ) {
-                                        Ok(texture) => {
-                                            println!("✅ Texture loaded successfully: {:?}", texture );
-                                            texture
-                                        }
-                                        Err(e) => {
-                                            println!("❌ Texture failed to load: {:?}", e);
-                                            crate::texture::Texture::create_dummy(device, queue)
-                                        }
-                                    }
-                                }
+            let normal_texture = mat
+                .normal_texture_index
+                .and_then(|idx| gpu_textures.get(idx).cloned());
 
+            let metallic_roughness_texture = mat
+                .metallic_roughness_texture_index
+                .and_then(|idx| gpu_textures.get(idx).cloned());
 
-                                #[cfg(target_arch = "wasm32")]
-                                crate::texture::Texture::create_dummy(device, queue)
+            // Material uniform
+            let material_properties = MaterialProperties {
+                base_color_factor: mat.base_color_factor,
+                metallic_factor: mat.metallic_factor,
+                roughness_factor: mat.roughness_factor,
+                _padding: [0.0; 2],
+            };
 
-                            } else {
-                                crate::texture::Texture::create_dummy(device, queue)
-                            };
+            let material_properties_buffer = device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("Material Properties Buffer"),
+                    contents: bytemuck::cast_slice(&[material_properties]),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                },
+            );
 
-                                // Load normal texture (optional)
-                                let normal_texture = if let Some(path) = mat.normal_texture
-                                {
-                                        Some(crate::texture::Texture::from_bytes(
-                                                device,
-                                                queue,
-                                                &std::fs::read(resource_path(&path, Some("de_dust2"))).unwrap(),
-                                                &path,
-                                        )
-                                        .unwrap())
-                                }
-                                else
-                                {
-                                        None
-                                };
+            let material_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: material_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&base_color_texture.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&base_color_texture.sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: material_properties_buffer.as_entire_binding(),
+                    },
+                ],
+                label: Some(&format!("{} Material Bind Group", mat.name)),
+            });
 
-                                // Load metallic roughness texture (optional)
-                                let metallic_roughness_texture = if let Some(path) =
-                                        mat.metallic_roughness_texture
-                                {
-                                        Some(crate::texture::Texture::from_bytes(
-                                                device,
-                                                queue,
-                                                &std::fs::read(resource_path(&path, Some("de_dust2"))).unwrap(),
-                                                &path,
-                                        )
-                                        .unwrap())
-                                }
-                                else
-                                {
-                                        None
-                                };
+            crate::material::Material {
+                name: mat.name,
+                base_color_texture,
+                normal_texture,
+                metallic_roughness_texture,
+                base_color_factor: mat.base_color_factor,
+                metallic_factor: mat.metallic_factor,
+                roughness_factor: mat.roughness_factor,
+                material_bind_group,
+            }
+        })
+        .collect::<Vec<_>>();
 
-                                // Create material properties uniform
-                                let material_properties = MaterialProperties {
-                                        base_color_factor: mat.base_color_factor,
-                                        metallic_factor: mat.metallic_factor,
-                                        roughness_factor: mat.roughness_factor,
-                                        _padding: [0.0; 2],
-                                };
-
-                                let material_properties_buffer = device.create_buffer_init(
-                                        &wgpu::util::BufferInitDescriptor {
-                                                label: Some("Material Properties Buffer"),
-                                                contents: bytemuck::cast_slice(&[
-                                                        material_properties,
-                                                ]),
-                                                usage: wgpu::BufferUsages::UNIFORM,
-                                        },
-                                );
-
-                                let material_bind_group =  device.create_bind_group(&BindGroupDescriptor {
-                                        layout: material_bind_group_layout,
-                                        entries: &[
-                                            wgpu::BindGroupEntry {
-                                                binding: 0,
-                                                resource: wgpu::BindingResource::TextureView(&base_color_texture.view),
-                                            },
-                                            wgpu::BindGroupEntry {
-                                                binding: 1,
-                                                resource: wgpu::BindingResource::Sampler(&base_color_texture.sampler),
-                                            },
-                                            wgpu::BindGroupEntry {
-                                                binding: 2,
-                                                resource: material_properties_buffer.as_entire_binding(),
-                                            },
-                                        ],
-                                        label: Some(&format!("{} Material Bind Group", mat.name)),
-                                    });
-
-                                crate::material::Material {
-                                        name: mat.name,
-                                        base_color_texture,
-                                        normal_texture,
-                                        metallic_roughness_texture,
-                                        base_color_factor: mat.base_color_factor,
-                                        metallic_factor: mat.metallic_factor,
-                                        roughness_factor: mat.roughness_factor,
-                                        material_bind_group,
-                                }
-                        })
-                        .collect::<Vec<_>>();
-
-                // Upload meshes
+                // Mesh upload stays the same
                 let gpu_meshes = meshes
                         .into_iter()
                         .map(|m| {
-                                // Create vertex and index buffers (existing code)
                                 let vertex_buffer = device.create_buffer_init(
                                         &wgpu::util::BufferInitDescriptor {
                                                 label: Some(&format!("{} Vertex Buffer", m.name)),
@@ -211,33 +270,7 @@ impl Model
                                         },
                                 );
 
-                                // Create transform buffer - convert cgmath Matrix4 to bytes
-                                let transform_data: [[f32; 4]; 4] = [
-                                        [
-                                                m.transform.x.x,
-                                                m.transform.x.y,
-                                                m.transform.x.z,
-                                                m.transform.x.w,
-                                        ],
-                                        [
-                                                m.transform.y.x,
-                                                m.transform.y.y,
-                                                m.transform.y.z,
-                                                m.transform.y.w,
-                                        ],
-                                        [
-                                                m.transform.z.x,
-                                                m.transform.z.y,
-                                                m.transform.z.z,
-                                                m.transform.z.w,
-                                        ],
-                                        [
-                                                m.transform.w.x,
-                                                m.transform.w.y,
-                                                m.transform.w.z,
-                                                m.transform.w.w,
-                                        ],
-                                ];
+                                let transform_data: [[f32; 4]; 4] = m.transform.into();
 
                                 let transform_buffer = device.create_buffer_init(
                                         &wgpu::util::BufferInitDescriptor {
@@ -252,7 +285,7 @@ impl Model
                                 );
 
                                 let transform_bind_group =
-                                        device.create_bind_group(&BindGroupDescriptor {
+                                        device.create_bind_group(&wgpu::BindGroupDescriptor {
                                                 layout: transform_bind_group_layout,
                                                 entries: &[wgpu::BindGroupEntry {
                                                         binding: 0,

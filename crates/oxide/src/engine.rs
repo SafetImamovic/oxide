@@ -482,9 +482,9 @@ impl EngineState
                         name: "bg_pass_3".to_string(),
                         enabled: true,
                         clear_color: wgpu::Color {
-                                r: 0.0,
-                                g: 0.0,
-                                b: 1.0,
+                                r: 0.05,
+                                g: 0.05,
+                                b: 0.05,
                                 a: 1.0,
                         },
                 };
@@ -671,15 +671,13 @@ impl ApplicationHandler<EngineState> for Engine
 
                 #[cfg(target_arch = "wasm32")]
                 {
-                        let model_name = self.model_name.clone();
-
                         // In WASM builds, async tasks must be spawned without blocking.
                         #[cfg(target_arch = "wasm32")]
                         if let Some(proxy) = self.proxy.take()
                         {
                                 wasm_bindgen_futures::spawn_local(async move {
                                         let state_result =
-                                                EngineState::new(window, model_name.as_str()).await;
+                                                EngineState::new(window, model_map).await;
                                         match state_result
                                         {
                                                 Ok(state) =>

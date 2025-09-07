@@ -1611,6 +1611,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "mc"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "console_error_panic_hook",
+ "console_log",
+ "env_logger",
+ "instant",
+ "js-sys",
+ "log",
+ "oxide",
+ "oxide-macro",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "winit",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

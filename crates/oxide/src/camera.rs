@@ -34,8 +34,8 @@ impl Default for CameraConfig
         fn default() -> Self
         {
                 Self {
-                        sensitivity: 1.0,
-                        speed: 1.0,
+                        sensitivity: 8.0,
+                        speed: 30.0,
                         aspect_ratio_correction: true,
                         initial_aspect: Some(1.0),
                         aspect: 1.0,
