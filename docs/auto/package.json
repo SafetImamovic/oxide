@@ -1,0 +1,15 @@
+{
+  "name": "auto",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "auto_bg.wasm",
+    "auto.js",
+    "auto.d.ts"
+  ],
+  "main": "auto.js",
+  "types": "auto.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
