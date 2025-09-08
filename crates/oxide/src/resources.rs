@@ -52,19 +52,30 @@ pub fn resource_path(
         }
 
         let window = web_sys::window().expect("no global `window` exists");
+
         let location = window.location();
+
+        let hostname = location.hostname().unwrap_or_default();
+
+        let is_github_pages = hostname.contains("github.io");
+
         let pathname = location.pathname().unwrap_or_default();
 
         let crate_name = pathname.split('/').nth(2).unwrap_or("").to_string();
 
         if crate_name.is_empty()
         {
-                format!("/resources/{}", file_name)
+                panic!("No crate name found!");
         }
-        else
+
+        let mut origin = "docs";
+
+        if is_github_pages
         {
-                format!("/docs/{}/resources/{}", crate_name, file_name)
+                origin = "oxide";
         }
+
+        format!("/{}/{}/resources/{}", origin, crate_name, file_name)
 }
 
 #[cfg(target_arch = "wasm32")]
