@@ -18,6 +18,10 @@ struct MeshTransform {
     model: mat4x4<f32>,
 };
 
+struct ModelTransform {
+    model: mat4x4<f32>,
+};
+
 struct MaterialProperties {
     base_color_factor: vec4<f32>,
     metallic_factor: f32,
@@ -30,7 +34,8 @@ struct MaterialProperties {
 @group(1) @binding(0) var<uniform> transform: MeshTransform;
 @group(2) @binding(0) var base_color_texture: texture_2d<f32>;
 @group(2) @binding(1) var base_color_sampler: sampler;
-@group(2) @binding(2) var<uniform> material_props: MaterialProperties; // ← ADD THIS LINE
+@group(2) @binding(2) var<uniform> material_props: MaterialProperties;
+@group(3) @binding(0) var<uniform> model_transform: ModelTransform;
 
 @vertex
 fn vs_main(
@@ -39,7 +44,8 @@ fn vs_main(
     var out: VertexOutput;
 
     let world_position = transform.model * vec4<f32>(model.position, 1.0);
-    out.clip_position = camera.view_proj * world_position;
+    let model_position = model_transform.model * world_position;
+    out.clip_position = camera.view_proj * model_position;
     out.tex_coords = model.tex_coords;
 
     return out;

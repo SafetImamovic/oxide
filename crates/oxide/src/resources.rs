@@ -10,6 +10,7 @@ pub fn load_resources() -> PathBuf
         if let Ok(dir) = std::env::var("CARGO_MANIFEST_DIR")
         {
                 let res = Path::new(&dir).join("resources");
+
                 if res.exists()
                 {
                         return res;
@@ -24,12 +25,9 @@ pub fn load_resources() -> PathBuf
         panic!("No resources folder found!");
 }
 
-#[cfg(target_arch = "wasm32")]
-pub fn load_resources() -> PathBuf
-{
-        PathBuf::from("/resources/")
-}
-
+/// Gets the resource path, `resources/` directory.
+///
+/// This function has 2 variants, one for `wasm` and this one for native.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn resource_path(
         file_name: &str,
@@ -39,6 +37,9 @@ pub fn resource_path(
         load_resources().join(file_name)
 }
 
+/// Gets the resource path, `resources/` directory.
+///
+/// This function has 2 variants, one for native and this one for `wasm`.
 #[cfg(target_arch = "wasm32")]
 pub fn resource_path(
         file_name: &str,
@@ -77,13 +78,10 @@ pub fn resource_path(
         format!("/{}/{}/resources/{}", origin, crate_name, file_name)
 }
 
-pub fn resource_path_relative(
-        base_file: &Path,
-        file_name: &str,
-) -> PathBuf
+#[cfg(target_arch = "wasm32")]
+pub fn load_resources() -> PathBuf
 {
-        let base_dir = base_file.parent().unwrap_or_else(|| Path::new("."));
-        base_dir.join(file_name)
+        PathBuf::from("/resources/")
 }
 
 /// Main function that is responsible for loading in 3D Models.
@@ -319,7 +317,7 @@ fn process_node(
                                 })
                                 .collect();
 
-                        // Create unique name for each primitive
+                        // Create a unique name for each primitive
                         let primitive_name = if mesh.primitives().count() > 1
                         {
                                 format!("{}_primitive_{}", mesh_name, primitive_index)

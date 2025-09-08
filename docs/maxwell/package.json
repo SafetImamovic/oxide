@@ -1,0 +1,15 @@
+{
+  "name": "maxwell",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "maxwell_bg.wasm",
+    "maxwell.js",
+    "maxwell.d.ts"
+  ],
+  "main": "maxwell.js",
+  "types": "maxwell.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

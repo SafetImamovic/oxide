@@ -34,12 +34,40 @@ impl Default for CameraConfig
         fn default() -> Self
         {
                 Self {
-                        sensitivity: 8.0,
+                        sensitivity: 2.0,
                         speed: 30.0,
                         aspect_ratio_correction: true,
                         initial_aspect: Some(1.0),
                         aspect: 1.0,
                         fovy: Deg(60.0),
+                }
+        }
+}
+
+impl Default for Camera
+{
+        fn default() -> Self
+        {
+                let core = CameraCore::new((0.0, 5.0, 10.0), Deg(0.0), Deg(0.0));
+
+                let projection = Projection::new(Deg(60.0), 0.1, 1000.0);
+
+                let config = CameraConfig::default();
+
+                let controller = CameraController::new();
+
+                let mut uniform = CameraUniform::new();
+
+                uniform.update_view_proj(&core, &projection);
+
+                Self {
+                        projection,
+                        core,
+                        controller,
+                        uniform,
+                        config,
+                        locked_in: true,
+                        show_dpad: false,
                 }
         }
 }
@@ -80,7 +108,7 @@ impl Camera
                                                         ui.label("FOV Y");
                                                         ui.add(egui::Slider::new(
                                                                 &mut self.config.fovy.0,
-                                                                1.0..=179.0,
+                                                                0.1..=179.9,
                                                         ));
                                                         ui.end_row();
 
@@ -95,6 +123,24 @@ impl Camera
                                                         ui.label("Aspect Ratio Correction");
                                                         ui.checkbox(&mut aspect, "");
                                                         ui.end_row();
+
+                                                        ui.label("ZNear");
+                                                        ui.add(egui::Slider::new(
+                                                                &mut self.projection.znear,
+                                                                0.01..=(self.projection.zfar
+                                                                        - 0.01),
+                                                        )
+                                                        .step_by(0.01));
+
+                                                        ui.end_row();
+
+                                                        ui.label("ZFar");
+                                                        ui.add(egui::Slider::new(
+                                                                &mut self.projection.zfar,
+                                                                (self.projection.znear + 0.01)
+                                                                        ..=1000.0,
+                                                        )
+                                                        .step_by(0.01));
                                                 });
                                 });
 
@@ -227,11 +273,11 @@ impl Camera
 
         pub fn update(
                 &mut self,
-                dt: Duration,
+                dt: &Duration,
         )
         {
                 self.controller
-                        .update_camera(&mut self.core, dt, &self.config);
+                        .update_camera(&mut self.core, &dt, &self.config);
                 self.uniform.update_view_proj(&self.core, &self.projection);
         }
 
@@ -290,7 +336,7 @@ impl Camera
 // We need this for Rust to store our data correctly for the shaders
 #[repr(C)]
 // This is so we can store this in a buffer
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Default, Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct CameraUniform
 {
         // We can't use cgmath with bytemuck directly, so we'll have
@@ -408,7 +454,7 @@ impl Projection
         }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CameraController
 {
         pub amount_left: f32,
@@ -510,7 +556,7 @@ impl CameraController
         pub fn update_camera(
                 &mut self,
                 camera: &mut CameraCore,
-                dt: Duration,
+                dt: &Duration,
                 config: &CameraConfig,
         )
         {

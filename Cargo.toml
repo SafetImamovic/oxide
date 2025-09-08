@@ -1,6 +1,15 @@
 [workspace]
 members = [
-    "crates/oxide", "crates/oxide-macro", "crates/examples/snake", "crates/examples/basic", "crates/examples/de_dust2", "crates/examples/cube", "crates/examples/auto", "crates/examples/mc",
+    "crates/oxide",
+    "crates/oxide-macro",
+    "crates/examples/snake",
+    "crates/examples/basic",
+    "crates/examples/de_dust2",
+    "crates/examples/cube",
+    "crates/examples/auto",
+    "crates/examples/mc",
+    "crates/examples/city",
+    "crates/examples/maxwell",
 ]
 
 resolver = "3"

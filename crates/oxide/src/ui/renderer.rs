@@ -1,5 +1,6 @@
 use crate::camera::Camera;
 use crate::engine::FillMode;
+use crate::model::Model;
 use crate::renderer::graph::RenderGraph;
 use crate::ui::draw_dpad;
 use derivative::Derivative;
@@ -7,6 +8,7 @@ use egui::{Align2, Context, FontData, FontDefinitions, FontFamily, Vec2};
 use egui_wgpu::Renderer;
 use egui_wgpu::ScreenDescriptor;
 use egui_winit::State;
+use std::collections::HashMap;
 use std::time::Duration;
 use wgpu::CommandEncoder;
 use wgpu::Device;
@@ -206,9 +208,10 @@ impl GuiRenderer
                 features: wgpu::Features,
                 camera: &mut Camera,
                 dt: &Duration,
+                models: &mut HashMap<String, Model>,
         )
         {
-                self.debug_window(graph, ui_scale, fill_mode, features, camera, &dt);
+                self.debug_window(graph, ui_scale, fill_mode, features, camera, &dt, models);
         }
 
         pub fn debug_window(
@@ -219,6 +222,7 @@ impl GuiRenderer
                 features: wgpu::Features,
                 camera: &mut Camera,
                 dt: &Duration,
+                models: &mut HashMap<String, Model>,
         )
         {
                 let mut temp_fill_mode = *fill_mode;
@@ -329,6 +333,11 @@ impl GuiRenderer
                                                             graph.passes.swap(i, j);
                                                     }
                                             });
+
+                                        for (key, value) in models.iter_mut() {
+                                                ui.label(format!("Model: {}", key));
+                                                value.ui(ui);
+                                        }
                                 });
 
                         });
