@@ -1,9 +1,9 @@
+use crate::renderer::pipeline::{PipelineKind, PipelineManager};
+use crate::texture::Texture;
 use derivative::Derivative;
 use std::any::Any;
 use std::collections::HashMap;
-
-use crate::renderer::pipeline::{PipelineKind, PipelineManager};
-use crate::texture::Texture;
+use wgpu::util::RenderEncoder;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -38,6 +38,7 @@ impl RenderGraph
                 camera: &wgpu::BindGroup,
                 depth_texture: &Texture,
                 models: Option<&HashMap<String, crate::model::Model>>,
+                device: &wgpu::Device,
         )
         {
                 for pass in self.passes.iter_mut()
@@ -51,6 +52,7 @@ impl RenderGraph
                                         &pipeline_manager,
                                         depth_texture,
                                         models,
+                                        device,
                                 );
                         }
                 }
@@ -90,6 +92,7 @@ pub trait RenderPass
                 pipeline_manager: &PipelineManager,
                 depth_texture: &Texture,
                 models: Option<&HashMap<String, crate::model::Model>>,
+                device: &wgpu::Device,
         );
 }
 
@@ -178,6 +181,7 @@ impl RenderPass for BackgroundPass
                 #[allow(unused_variables)] pipeline_manager: &PipelineManager,
                 #[allow(unused_variables)] depth_texture: &Texture,
                 #[allow(unused_variables)] obj_model: Option<&HashMap<String, crate::model::Model>>,
+                device: &wgpu::Device,
         )
         {
                 // For a background pass, we typically don't need depth testing
@@ -263,6 +267,7 @@ impl RenderPass for GeometryPass
                 pipeline_manager: &PipelineManager,
                 depth_texture: &Texture,
                 models: Option<&HashMap<String, crate::model::Model>>,
+                device: &wgpu::Device,
         )
         {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -295,12 +300,16 @@ impl RenderPass for GeometryPass
 
                 for model in models.unwrap().values()
                 {
+                        render_pass.set_bind_group(
+                                3,
+                                &model.create_model_transform_bind_group(&device),
+                                &[],
+                        );
+
                         for mesh in model.meshes.iter()
                         {
-                                // Set the transform bind group for THIS mesh
                                 render_pass.set_bind_group(1, &mesh.transform_bind_group, &[]);
 
-                                // Set the material bind group for THIS mesh's material
                                 let material_index = mesh.material;
                                 render_pass.set_bind_group(
                                         2,
@@ -308,7 +317,6 @@ impl RenderPass for GeometryPass
                                         &[],
                                 );
 
-                                // Draw the mesh
                                 render_pass.draw_mesh(mesh);
                         }
                 }

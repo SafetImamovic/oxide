@@ -180,6 +180,7 @@ impl Engine
                         &state.camera.get_bind_group(&state.device),
                         &state.depth_texture,
                         Some(&state.models),
+                        &state.device,
                 );
 
                 if self.config.enable_debug
@@ -196,7 +197,7 @@ impl Engine
                 state.queue.submit(std::iter::once(encoder.finish()));
                 output.present();
 
-                state.update(*dt);
+                state.update(&dt);
 
                 Ok(())
         }
@@ -430,10 +431,15 @@ impl EngineState
 
         pub fn update(
                 &mut self,
-                dt: Duration,
+                dt: &Duration,
         )
         {
-                self.camera.update(dt);
+                self.camera.update(&dt);
+
+                for model in self.models.values_mut()
+                {
+                        model.update(&dt);
+                }
         }
 
         pub fn build_pipelines(&mut self)
@@ -442,6 +448,9 @@ impl EngineState
 
                 let material_bind_group_layout = create_material_bind_group_layout(&self.device);
 
+                let model_transform_bind_group_layout =
+                        create_transform_bind_group_layout(&self.device);
+
                 self.pipeline_manager.build_geometry_pipeline(
                         &self.device,
                         &self.surface_manager.configuration,
@@ -449,6 +458,7 @@ impl EngineState
                                 &self.camera.get_bind_group_layout(&self.device),
                                 &transform_bind_group_layout,
                                 &material_bind_group_layout,
+                                &model_transform_bind_group_layout,
                         ],
                         &FillMode::Fill,
                 );
@@ -541,6 +551,7 @@ impl EngineState
                                 enabled_features,
                                 &mut self.camera,
                                 &dt,
+                                &mut self.models,
                         );
 
                         if temp_fill_mode != *fill_mode
@@ -554,6 +565,9 @@ impl EngineState
                                 let material_bind_group_layout =
                                         create_material_bind_group_layout(&self.device);
 
+                                let model_transform_bind_group_layout =
+                                        create_transform_bind_group_layout(&self.device);
+
                                 // Request Pipeline Rebuild
                                 self.pipeline_manager.build_geometry_pipeline(
                                         &self.device,
@@ -562,6 +576,7 @@ impl EngineState
                                                 &self.camera.get_bind_group_layout(&self.device),
                                                 &transform_bind_group_layout,
                                                 &material_bind_group_layout,
+                                                &model_transform_bind_group_layout,
                                         ],
                                         &temp_fill_mode,
                                 );

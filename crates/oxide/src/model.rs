@@ -1,7 +1,14 @@
 use crate::geometry::mesh::{Mesh, MeshData};
 use crate::material::{MaterialData, MaterialProperties};
+use crate::resources::create_transform_bind_group_layout;
+use cgmath::num_traits::float::FloatCore;
+use cgmath::num_traits::real::Real;
+use cgmath::{Deg, EuclideanSpace, Euler, InnerSpace, Quaternion, Rad, Rotation3, Vector3};
+use egui::DragValue;
 use std::ops::Range;
+use std::time::Duration;
 use wgpu::util::DeviceExt;
+use wgpu::{BindGroupDescriptor, BindGroupEntry};
 
 pub trait Vertex
 {
@@ -45,11 +52,38 @@ impl Vertex for ModelVertex
         }
 }
 
+pub trait Transform
+{
+        fn calculate_transform(&self) -> cgmath::Matrix4<f32>;
+}
+
 #[derive(Debug)]
 pub struct Model
 {
+        pub position: cgmath::Point3<f32>,
+        pub rotation: cgmath::Quaternion<f32>,
+        pub euler_angles: [f32; 3],
+        pub rotation_speeds: [f32; 3],
+        pub is_spinning: bool,
+        pub scale: cgmath::Vector3<f32>,
         pub meshes: Vec<Mesh>,
         pub materials: Vec<crate::material::Material>,
+}
+
+impl Transform for Model
+{
+        fn calculate_transform(&self) -> cgmath::Matrix4<f32>
+        {
+                let translation = cgmath::Matrix4::from_translation(self.position.to_vec());
+                let rotation = cgmath::Matrix4::from(self.rotation);
+                let scale = cgmath::Matrix4::from_nonuniform_scale(
+                        self.scale.x,
+                        self.scale.y,
+                        self.scale.z,
+                );
+
+                translation * rotation * scale
+        }
 }
 
 impl Model
@@ -250,6 +284,8 @@ impl Model
         })
         .collect::<Vec<_>>();
 
+                log::info!("from_data Called!");
+
                 // Mesh upload stays the same
                 let gpu_meshes = meshes
                         .into_iter()
@@ -270,33 +306,13 @@ impl Model
                                         },
                                 );
 
-                                let transform_data: [[f32; 4]; 4] = m.transform.into();
-
-                                let transform_buffer = device.create_buffer_init(
-                                        &wgpu::util::BufferInitDescriptor {
-                                                label: Some(&format!(
-                                                        "{} Transform Buffer",
-                                                        m.name
-                                                )),
-                                                contents: bytemuck::cast_slice(&transform_data),
-                                                usage: wgpu::BufferUsages::UNIFORM
-                                                        | wgpu::BufferUsages::COPY_DST,
-                                        },
+                                let transform_buffer = Self::create_transform_buffer(&device, &m);
+                                let transform_bind_group = Self::create_transform_bind_group(
+                                        &device,
+                                        &transform_bind_group_layout,
+                                        &transform_buffer,
+                                        &m,
                                 );
-
-                                let transform_bind_group =
-                                        device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                                layout: transform_bind_group_layout,
-                                                entries: &[wgpu::BindGroupEntry {
-                                                        binding: 0,
-                                                        resource: transform_buffer
-                                                                .as_entire_binding(),
-                                                }],
-                                                label: Some(&format!(
-                                                        "{} Transform Bind Group",
-                                                        m.name
-                                                )),
-                                        });
 
                                 Mesh {
                                         name: m.name,
@@ -311,9 +327,294 @@ impl Model
                         .collect::<Vec<_>>();
 
                 Model {
+                        position: cgmath::Point3::new(0.0, 0.0, 0.0),
+                        rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                        euler_angles: [0.0, 0.0, 0.0],
+                        rotation_speeds: [0.0, 0.0, 0.0],
+                        is_spinning: false,
+                        scale: cgmath::Vector3::new(1.0, 1.0, 1.0),
                         meshes: gpu_meshes,
                         materials: gpu_materials,
                 }
+        }
+
+        pub fn create_transform_buffer(
+                device: &wgpu::Device,
+                m: &MeshData,
+        ) -> wgpu::Buffer
+        {
+                let transform_data: [[f32; 4]; 4] = m.transform.into();
+
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Transform Buffer"),
+                        contents: bytemuck::cast_slice(&transform_data),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                })
+        }
+
+        pub fn create_model_transform_buffer(
+                &self,
+                device: &wgpu::Device,
+        ) -> wgpu::Buffer
+        {
+                let transform_data: [[f32; 4]; 4] = self.calculate_transform().into();
+
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Transform Buffer"),
+                        contents: bytemuck::cast_slice(&transform_data),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                })
+        }
+
+        pub fn create_model_transform_bind_group(
+                &self,
+                device: &wgpu::Device,
+        ) -> wgpu::BindGroup
+        {
+                let layout = create_transform_bind_group_layout(&device);
+
+                device.create_bind_group(&BindGroupDescriptor {
+                        label: Some("model_transform_bind_group"),
+                        layout: &layout,
+                        entries: &[BindGroupEntry {
+                                binding: 0,
+                                resource: self
+                                        .create_model_transform_buffer(device)
+                                        .as_entire_binding(),
+                        }],
+                })
+        }
+
+        pub fn create_transform_bind_group(
+                device: &wgpu::Device,
+                transform_bind_group_layout: &wgpu::BindGroupLayout,
+                transform_buffer: &wgpu::Buffer,
+                m: &MeshData,
+        ) -> wgpu::BindGroup
+        {
+                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        layout: transform_bind_group_layout,
+                        entries: &[wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: transform_buffer.as_entire_binding(),
+                        }],
+                        label: Some(&format!("{} Transform Bind Group", m.name)),
+                })
+        }
+
+        pub fn rotation_ui(
+                &mut self,
+                ui: &mut egui::Ui,
+        )
+        {
+                ui.heading("Rotation Controls");
+
+                // Euler angle editor (only affects initial orientation)
+                ui.collapsing("Euler Angles (Initial)", |ui| {
+                        ui.add(egui::DragValue::new(&mut self.euler_angles[0])
+                                .speed(1.0)
+                                .suffix("°"));
+                        ui.add(egui::DragValue::new(&mut self.euler_angles[1])
+                                .speed(1.0)
+                                .suffix("°"));
+                        ui.add(egui::DragValue::new(&mut self.euler_angles[2])
+                                .speed(1.0)
+                                .suffix("°"));
+
+                        self.rotation = Quaternion::from(Euler::new(
+                                Rad::from(Deg(self.euler_angles[0])),
+                                Rad::from(Deg(self.euler_angles[1])),
+                                Rad::from(Deg(self.euler_angles[2])),
+                        ))
+                        .normalize();
+                });
+
+                // Continuous rotation controls
+                ui.collapsing("Continuous Rotation", |ui| {
+                        ui.checkbox(&mut self.is_spinning, "Enable Spinning");
+
+                        ui.label("Rotation Speeds (deg/sec):");
+
+                        ui.add(egui::Slider::new(&mut self.rotation_speeds[0], -720.0..=720.0)
+                                .text("X Speed"));
+                        ui.add(egui::Slider::new(&mut self.rotation_speeds[1], -720.0..=720.0)
+                                .text("Y Speed"));
+                        ui.add(egui::Slider::new(&mut self.rotation_speeds[2], -720.0..=720.0)
+                                .text("Z Speed"));
+
+                        if ui.button("Reset Speeds").clicked()
+                        {
+                                self.rotation_speeds = [0.0, 0.0, 0.0];
+                        }
+                });
+
+                // Current status
+                ui.collapsing("Current Status", |ui| {
+                        let euler = Euler::from(self.rotation);
+                        ui.label(format!(
+                                "Current Euler: X: {:.1}°, Y: {:.1}°, Z: {:.1}°",
+                                euler.x.0.to_degrees(),
+                                euler.y.0.to_degrees(),
+                                euler.z.0.to_degrees()
+                        ));
+
+                        ui.label(format!(
+                                "Rotation Speeds: X: {:.1}°/s, Y: {:.1}°/s, Z: {:.1}°/s",
+                                self.rotation_speeds[0],
+                                self.rotation_speeds[1],
+                                self.rotation_speeds[2]
+                        ));
+                });
+        }
+
+        pub fn ui(
+                &mut self,
+                ui: &mut egui::Ui,
+        )
+        {
+                egui::CollapsingHeader::new("Model")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                                ui.label("Position");
+                                ui.add(egui::DragValue::new(&mut self.position.x));
+                                ui.add(egui::DragValue::new(&mut self.position.y));
+                                ui.add(egui::DragValue::new(&mut self.position.z));
+
+                                self.rotation_ui(ui);
+
+                                ui.label("Scale");
+                                ui.add(egui::DragValue::new(&mut self.scale.x).speed(0.001));
+                                ui.add(egui::DragValue::new(&mut self.scale.y).speed(0.001));
+                                ui.add(egui::DragValue::new(&mut self.scale.z).speed(0.001));
+                        });
+        }
+
+        fn quat_to_axis_angle(quat: Quaternion<f32>) -> (Vector3<f32>, f32)
+        {
+                let angle = 2.0 * quat.s.acos();
+                let sin_half_angle = (1.0 - quat.s * quat.s).sqrt();
+
+                let axis = if sin_half_angle > 0.001
+                {
+                        Vector3::new(
+                                quat.v.x / sin_half_angle,
+                                quat.v.y / sin_half_angle,
+                                quat.v.z / sin_half_angle,
+                        )
+                }
+                else
+                {
+                        Vector3::unit_x()
+                };
+
+                (axis.normalize(), angle)
+        }
+
+        pub fn update(
+                &mut self,
+                dt: &Duration,
+        )
+        {
+                if !self.is_spinning
+                {
+                        return;
+                }
+
+                let delta_seconds = dt.as_secs_f32();
+
+                // Apply continuous rotation
+                let x_rot = Quaternion::from_axis_angle(
+                        Vector3::unit_x(),
+                        Rad::from(Deg(self.rotation_speeds[0] * delta_seconds)),
+                );
+
+                let y_rot = Quaternion::from_axis_angle(
+                        Vector3::unit_y(),
+                        Rad::from(Deg(self.rotation_speeds[1] * delta_seconds)),
+                );
+
+                let z_rot = Quaternion::from_axis_angle(
+                        Vector3::unit_z(),
+                        Rad::from(Deg(self.rotation_speeds[2] * delta_seconds)),
+                );
+
+                self.rotation = (z_rot * y_rot * x_rot * self.rotation).normalize();
+
+                self.update_euler_from_quat();
+        }
+
+        pub fn toggle_spin(&mut self)
+        {
+                self.is_spinning = !self.is_spinning;
+        }
+
+        fn update_euler_from_quat(&mut self)
+        {
+                // Convert quaternion to Euler angles
+                let euler = Euler::from(self.rotation);
+
+                // Convert radians to degrees and store
+                self.euler_angles = [
+                        euler.x.0.to_degrees(),
+                        euler.y.0.to_degrees(),
+                        euler.z.0.to_degrees(),
+                ];
+
+                // Optional: Normalize angles to -180..180 range for cleaner UI
+                self.normalize_euler_angles();
+        }
+
+        fn normalize_euler_angles(&mut self)
+        {
+                for angle in &mut self.euler_angles
+                {
+                        // Normalize to -180 to 180 range
+                        *angle = (*angle % 360.0);
+                        if *angle > 180.0
+                        {
+                                *angle -= 360.0;
+                        }
+                        else if *angle < -180.0
+                        {
+                                *angle += 360.0;
+                        }
+                }
+        }
+
+        pub fn set_rotation_speed(
+                &mut self,
+                axis: usize,
+                speed_deg_per_sec: f32,
+        )
+        {
+                if axis < 3
+                {
+                        self.rotation_speeds[axis] = speed_deg_per_sec;
+                }
+        }
+
+        fn axis_angle_to_quat(
+                axis: Vector3<f32>,
+                angle: f32,
+        ) -> Quaternion<f32>
+        {
+                let half_angle = angle / 2.0;
+                let sin_half = half_angle.sin();
+                let cos_half = half_angle.cos();
+
+                Quaternion::new(cos_half, axis.x * sin_half, axis.y * sin_half, axis.z * sin_half)
+                        .normalize()
+        }
+
+        // Get Euler angles from quaternion (for demonstration)
+        fn quat_to_euler(quat: Quaternion<f32>) -> [f32; 3]
+        {
+                let euler_rad: cgmath::Euler<Rad<f32>> = quat.into();
+                [
+                        euler_rad.x.0.to_degrees(),
+                        euler_rad.y.0.to_degrees(),
+                        euler_rad.z.0.to_degrees(),
+                ]
         }
 }
 

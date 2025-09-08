@@ -30,6 +30,7 @@ derivative = "2.2.0"
 wasm-bindgen-futures = "0.4.50"
 web-sys = "0.3.77"
 instant = "0.1.13"
+rand = "0.9.2"
 
 [dependencies.image]
 version = "0.25.6"
