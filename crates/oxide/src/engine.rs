@@ -327,10 +327,6 @@ pub struct EngineState
 
         pub depth_texture: crate::texture::Texture,
 
-        pub vertex_buffers: Vec<wgpu::Buffer>,
-
-        pub index_buffers: Vec<wgpu::Buffer>,
-
         pub render_graph: RenderGraph,
 
         pub pipeline_manager: PipelineManager,
@@ -419,8 +415,6 @@ impl EngineState
                         queue,
                         gui,
                         surface_manager,
-                        index_buffers: vec![],
-                        vertex_buffers: vec![],
                 })
         }
 

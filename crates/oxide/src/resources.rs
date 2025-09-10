@@ -186,16 +186,15 @@ pub async fn load_gltf(
 
                 materials.push(MaterialData {
                         name: name.clone(),
-                        base_color_texture: None, // This can probably be removed
+                        base_color_texture: None,
                         base_color_factor: pbr.base_color_factor(),
                         metallic_factor: pbr.metallic_factor(),
                         roughness_factor: pbr.roughness_factor(),
-                        base_color_texture_index, // Now this will have the actual index!
-                        normal_texture_index,     // Now this will have the actual index!
-                        diffuse_texture: None,    // This can probably be removed
-                        normal_texture: None,     // This can probably be removed
-                        metallic_roughness_texture: None, // This can probably be removed
-                        metallic_roughness_texture_index, // Now this will have the actual index!
+                        base_color_texture_index,
+                        normal_texture_index,
+                        normal_texture: None,
+                        metallic_roughness_texture: None,
+                        metallic_roughness_texture_index,
                 });
         }
 
