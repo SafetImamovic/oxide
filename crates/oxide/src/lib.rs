@@ -168,3 +168,8 @@ pub mod resources;
 pub mod texture;
 pub mod ui;
 pub mod utils;
+
+fn read_config() -> Result<String, std::io::Error>
+{
+        std::fs::read_to_string("config.txt")
+}

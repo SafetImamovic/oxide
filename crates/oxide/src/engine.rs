@@ -146,16 +146,11 @@ pub struct Engine
 
         pub model_map: HashMap<String, String>,
 
-        // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
         pub window: Option<Arc<Window>>,
 
         /// `wgpu` internals.
         pub state: Option<EngineState>,
-
-        // --- Timing ---
-        /// The timestamp of the last frame, used for delta time calculations.
-        pub time: Option<instant::Instant>,
 }
 
 impl Engine
@@ -961,7 +956,6 @@ impl EngineBuilder
                                 config,
                                 model_map,
                                 state: None,
-                                time: None,
                                 window: None,
                         },
                 }
@@ -999,16 +993,6 @@ impl EngineBuilder
                 self.engine.config.debug_toggle_key = Some(key_code as u32);
 
                 Ok(self)
-        }
-
-        /// Set the time (for delta timing)
-        pub fn with_time(
-                mut self,
-                time: instant::Instant,
-        ) -> Self
-        {
-                self.engine.time = Some(time);
-                self
         }
 
         /// Finally builds the [`Engine`].
