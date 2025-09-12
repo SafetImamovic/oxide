@@ -11,7 +11,7 @@ pub fn run() -> anyhow::Result<()>
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 
-        engine.add_obj_model("maxwell", "maxwell_the_cat_dingus.glb");
+        engine.add_model("maxwell", "maxwell_the_cat_dingus.glb");
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 

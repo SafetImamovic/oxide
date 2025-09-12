@@ -37,6 +37,7 @@ use crate::renderer::graph::RenderGraph;
 use crate::renderer::pipeline::PipelineManager;
 use crate::renderer::surface::SurfaceManager;
 use crate::resources::create_transform_bind_group_layout;
+use crate::texture::Texture;
 use crate::ui::UiSystem;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -197,7 +198,7 @@ impl Engine
                 Ok(())
         }
 
-        pub fn add_obj_model(
+        pub fn add_model(
                 &mut self,
                 handle: impl Into<String>,
                 file_name: impl Into<String>,
@@ -325,7 +326,7 @@ pub struct EngineState
 
         pub camera: Camera,
 
-        pub depth_texture: crate::texture::Texture,
+        pub depth_texture: Texture,
 
         pub render_graph: RenderGraph,
 
@@ -794,6 +795,11 @@ impl ApplicationHandler<EngineState> for Engine
                                                 let now = instant::Instant::now();
 
                                                 self.last_render_time = now - last_render_time;
+
+                                                log::info!(
+                                                        "Render Time: {:?}",
+                                                        self.last_render_time
+                                                );
                                         }
                                         Err(e) =>
                                         {

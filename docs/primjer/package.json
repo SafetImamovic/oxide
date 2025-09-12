@@ -1,0 +1,15 @@
+{
+  "name": "primjer",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "primjer_bg.wasm",
+    "primjer.js",
+    "primjer.d.ts"
+  ],
+  "main": "primjer.js",
+  "types": "primjer.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

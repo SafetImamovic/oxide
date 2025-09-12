@@ -20,12 +20,6 @@
 //!   entry point will be invoked automatically by the host (e.g., the browser),
 //!   and it delegates to [`run()`].
 //!
-//! Example native binary (thin wrapper that just calls the library):
-//! ```rust
-//! // The engine is created inside `oxide::run()`
-//! oxide::run().unwrap()
-//! ```
-//!
 //! # WebAssembly usage
 //!
 //! - Build the project as a library crate for `wasm32` (e.g., using your
@@ -147,20 +141,12 @@
 //!
 //! - `Ok(())` when the event loop exits cleanly.
 //! - An error if engine construction or the runner encounter a failure.
-//!
-//! # Example
-//!
-//! Example (native wrapper):
-//! ```no_run
-//! {
-//! // Engine is created inside `oxide::run()`.
-//! oxide::run().unwrap()
-//! ```
 
 pub mod camera;
 pub mod config;
 pub mod engine;
 pub mod geometry;
+pub mod lighting;
 pub mod material;
 pub mod model;
 pub mod renderer;
@@ -168,8 +154,3 @@ pub mod resources;
 pub mod texture;
 pub mod ui;
 pub mod utils;
-
-fn read_config() -> Result<String, std::io::Error>
-{
-        std::fs::read_to_string("config.txt")
-}

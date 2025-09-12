@@ -11,7 +11,7 @@ pub fn run() -> anyhow::Result<()>
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 
-        engine.add_obj_model("auto", "free_1975_porsche_911_930_turbo.glb");
+        engine.add_model("auto", "free_1975_porsche_911_930_turbo.glb");
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 

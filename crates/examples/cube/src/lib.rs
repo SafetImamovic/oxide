@@ -12,7 +12,7 @@ pub fn run() -> anyhow::Result<()>
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 
-        engine.add_obj_model("cube", "cube.obj");
+        engine.add_model("cube", "cube.obj");
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 

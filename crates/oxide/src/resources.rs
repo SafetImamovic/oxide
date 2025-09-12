@@ -2,7 +2,10 @@ use crate::geometry::mesh::MeshData;
 use crate::material::MaterialData;
 use crate::model::{Model, ModelVertex};
 use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_resources() -> PathBuf
@@ -223,6 +226,7 @@ async fn load_glb(
                         web_sys::window().ok_or_else(|| anyhow::anyhow!("No window available"))?;
 
                 let full_path = resource_path(path, crate_name);
+
                 log::info!("Fetching GLB from: {}", full_path);
 
                 let resp_value =
@@ -248,14 +252,12 @@ async fn load_glb(
 
                 let bytes = js_sys::Uint8Array::new(&array_buffer).to_vec();
 
-                // Import GLB - this should work since everything is embedded
                 gltf::import_slice(&bytes)
                         .map_err(|e| anyhow::anyhow!("Failed to import GLB: {:?}", e))
         }
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-                // Native loading - simple file read
                 let bytes = std::fs::read(path)?;
                 gltf::import_slice(&bytes)
                         .map_err(|e| anyhow::anyhow!("Failed to import GLB: {:?}", e))

@@ -11,7 +11,7 @@ pub fn run() -> anyhow::Result<()>
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 
-        engine.add_obj_model("dodecahedron", "dodecahedron.glb");
+        engine.add_model("dodecahedron", "dodecahedron.glb");
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 

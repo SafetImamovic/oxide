@@ -3,7 +3,6 @@ use crate::texture::Texture;
 use derivative::Derivative;
 use std::any::Any;
 use std::collections::HashMap;
-use wgpu::util::RenderEncoder;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -181,7 +180,7 @@ impl RenderPass for BackgroundPass
                 #[allow(unused_variables)] pipeline_manager: &PipelineManager,
                 #[allow(unused_variables)] depth_texture: &Texture,
                 #[allow(unused_variables)] obj_model: Option<&HashMap<String, crate::model::Model>>,
-                device: &wgpu::Device,
+                #[allow(unused_variables)] device: &wgpu::Device,
         )
         {
                 // For a background pass, we typically don't need depth testing
