@@ -2,6 +2,46 @@ use oxide_macro::oxide_main;
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
 
+pub struct SnakeGame
+{
+        pub grid: Grid,
+        pub snake: Snake,
+}
+
+impl SnakeGame
+{
+        pub fn new(
+                grid: Grid,
+                snake: Snake,
+        ) -> Self
+        {
+                Self {
+                        grid,
+                        snake,
+                }
+        }
+}
+
+pub struct Grid
+{
+        pub width: u8,
+        pub height: u8,
+}
+
+impl Grid
+{
+        pub fn new(
+                width: u8,
+                height: u8,
+        ) -> Self
+        {
+                Self {
+                        width,
+                        height,
+                }
+        }
+}
+
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Copy)]
 pub enum Direction
 {
@@ -16,15 +56,22 @@ pub struct Snake
 {
         pub direction: Direction,
         pub head: &'static str,
+        pub grid_pos: (u8, u8),
+        pub step_speed: f32,
 }
 
 impl Snake
 {
-        pub fn new(head: &'static str) -> Self
+        pub fn new(
+                head: &'static str,
+                step_speed: f32,
+        ) -> Self
         {
                 Self {
                         direction: Direction::None,
                         head,
+                        grid_pos: (0, 0),
+                        step_speed,
                 }
         }
 
@@ -82,28 +129,41 @@ impl Snake
                 head: &mut oxide::model::Model,
         )
         {
+                log::info!("{:?}", self.grid_pos);
+
                 match self.direction
                 {
                         Direction::Up =>
                         {
-                                head.position.z -= 0.25;
+                                head.position.z -= self.step_speed;
+
+                                self.grid_pos.0 += 1;
                         }
                         Direction::Down =>
                         {
-                                head.position.z += 0.25;
+                                head.position.z += self.step_speed;
+
+                                self.grid_pos.0 -= 1;
                         }
                         Direction::Left =>
                         {
-                                head.position.x -= 0.25;
+                                head.position.x -= self.step_speed;
+
+                                self.grid_pos.1 -= 1;
                         }
                         Direction::Right =>
                         {
-                                head.position.x += 0.25;
+                                head.position.x += self.step_speed;
+
+                                self.grid_pos.1 += 1;
                         }
                         Direction::None =>
                         {
                                 head.position.x = 0.0;
                                 head.position.z = 0.0;
+
+                                self.grid_pos.0 = 0;
+                                self.grid_pos.1 = 0;
                         }
                 }
         }
@@ -122,7 +182,9 @@ pub fn run() -> anyhow::Result<()>
 
         engine.add_model("snake_head", "dodecahedron.glb");
 
-        let mut snake = Snake::new("snake_head");
+        let snake = Snake::new("snake_head", 0.5f32);
+
+        let mut game = SnakeGame::new(Grid::new(20, 20), snake);
 
         engine.register_behavior(|eng| {
                 log::info!("{}", eng.current_tick);
@@ -133,7 +195,7 @@ pub fn run() -> anyhow::Result<()>
                 {
                         None =>
                         {}
-                        Some(k) => snake.change_direction(&k),
+                        Some(k) => game.snake.change_direction(&k),
                 }
 
                 let mut snake_head = eng
@@ -144,7 +206,7 @@ pub fn run() -> anyhow::Result<()>
                         .get_mut("snake_head")
                         .unwrap();
 
-                snake.move_snake(&mut snake_head);
+                game.snake.move_snake(&mut snake_head);
         });
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
