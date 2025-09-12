@@ -8,7 +8,7 @@ pub fn run() -> anyhow::Result<()>
 
         let engine = oxide::engine::EngineBuilder::new()
                 .with_debug_ui()
-                .with_tps(20u16)
+                .with_tps(1u16)
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 

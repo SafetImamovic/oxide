@@ -40,6 +40,7 @@ use crate::resources::create_transform_bind_group_layout;
 use crate::texture::Texture;
 use crate::ui::UiSystem;
 use anyhow::{Context, Result};
+use instant::Instant;
 use serde::{Deserialize, Serialize};
 use winit::event::{DeviceEvent, DeviceId, ElementState};
 use winit::event_loop::ControlFlow;
@@ -141,9 +142,17 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
-        pub tps: Option<u16>,
+        pub tps: u16,
+
+        pub tps_interval: Duration,
+
+        pub current_tick: u16,
 
         pub last_render_time: Duration,
+
+        pub last_tick_time: Duration,
+
+        pub start_time: Instant,
 
         pub config: Config,
 
@@ -766,7 +775,17 @@ impl ApplicationHandler<EngineState> for Engine
                         .renderer
                         .handle_input(&self.window.as_ref().unwrap(), &event);
 
-                let last = self.last_render_time;
+                let elapsed = Instant::now() - self.start_time;
+
+                while elapsed - self.last_tick_time >= self.tps_interval
+                {
+                        self.current_tick += 1;
+                        self.last_tick_time += self.tps_interval;
+
+                        log::info!("Tick: {}", self.current_tick);
+
+                        // Game loop dependant on tick system
+                }
 
                 match event
                 {
@@ -780,9 +799,11 @@ impl ApplicationHandler<EngineState> for Engine
                         }
                         WindowEvent::RedrawRequested =>
                         {
-                                let last_render_time = instant::Instant::now();
+                                let last_render_time = self.last_render_time;
 
-                                match self.render(&last)
+                                let render_start = Instant::now();
+
+                                match self.render(&last_render_time)
                                 {
                                         Ok(_) =>
                                         {
@@ -794,14 +815,9 @@ impl ApplicationHandler<EngineState> for Engine
 
                                                 window.request_redraw();
 
-                                                let now = instant::Instant::now();
+                                                let render_end = Instant::now();
 
-                                                self.last_render_time = now - last_render_time;
-
-                                                log::info!(
-                                                        "Render Time: {:?}",
-                                                        self.last_render_time
-                                                );
+                                                self.last_render_time = render_end - render_start;
                                         }
                                         Err(e) =>
                                         {
@@ -955,7 +971,11 @@ impl EngineBuilder
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 last_render_time: Duration::from_secs_f32(0.0),
-                                tps: None,
+                                last_tick_time: Duration::from_secs_f32(0.0),
+                                tps: 20,
+                                current_tick: 0,
+                                tps_interval: Duration::from_secs_f32(1.0 / 20.0),
+                                start_time: Instant::now(),
                                 config,
                                 model_map,
                                 state: None,
@@ -964,13 +984,15 @@ impl EngineBuilder
                 }
         }
 
-        /// Adds a Tick Per Second timing mechanism.
+        /// Specify the Ticks Per Second.
+        ///
+        /// Default is 20tps.
         pub fn with_tps(
                 mut self,
                 tps: u16,
         ) -> Self
         {
-                self.engine.tps = Some(tps);
+                self.engine.tps = tps;
                 self
         }
 
@@ -1020,8 +1042,10 @@ impl EngineBuilder
         ///
         /// See [`EngineBuilder`] for important notes on deferred
         /// initialization.
-        pub fn build(self) -> Result<Engine>
+        pub fn build(mut self) -> Result<Engine>
         {
+                self.engine.tps_interval = Duration::from_secs_f32(1.0 / self.engine.tps as f32);
+
                 Ok(self.engine)
         }
 
