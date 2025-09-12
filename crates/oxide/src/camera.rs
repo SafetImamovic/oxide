@@ -494,22 +494,22 @@ impl CameraController
                 let amount = if pressed { 1.0 } else { 0.0 };
                 match key
                 {
-                        KeyCode::KeyW | KeyCode::ArrowUp =>
+                        KeyCode::KeyW =>
                         {
                                 self.amount_forward = amount;
                                 true
                         }
-                        KeyCode::KeyS | KeyCode::ArrowDown =>
+                        KeyCode::KeyS =>
                         {
                                 self.amount_backward = amount;
                                 true
                         }
-                        KeyCode::KeyA | KeyCode::ArrowLeft =>
+                        KeyCode::KeyA =>
                         {
                                 self.amount_left = amount;
                                 true
                         }
-                        KeyCode::KeyD | KeyCode::ArrowRight =>
+                        KeyCode::KeyD =>
                         {
                                 self.amount_right = amount;
                                 true

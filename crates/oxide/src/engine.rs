@@ -146,6 +146,8 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
+        pub current_key: Option<(KeyCode, ElementState)>,
+
         #[derivative(Debug = "ignore")]
         pub behavior_list: Vec<Behavior>,
 
@@ -856,6 +858,8 @@ impl ApplicationHandler<EngineState> for Engine
                                 ..
                         } =>
                         {
+                                self.current_key = Some((code, key_state));
+
                                 state.camera
                                         .controller
                                         .handle_key(code, key_state.is_pressed());
@@ -994,6 +998,7 @@ impl EngineBuilder
                                 proxy: None,
                                 last_render_time: Duration::from_secs_f32(0.0),
                                 last_tick_time: Duration::from_secs_f32(0.0),
+                                current_key: None,
                                 tps: 20,
                                 current_tick: 0,
                                 tps_interval: Duration::from_secs_f32(1.0 / 20.0),
