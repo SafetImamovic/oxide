@@ -141,6 +141,8 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
+        pub tps: Option<u16>,
+
         pub last_render_time: Duration,
 
         pub config: Config,
@@ -270,7 +272,7 @@ impl Engine
                         .surface
                         .configure(&state.device, &state.surface_manager.configuration);
 
-                state.depth_texture = crate::texture::Texture::create_depth_texture(
+                state.depth_texture = Texture::create_depth_texture(
                         &state.device,
                         &state.surface_manager.configuration,
                         "depth_texture",
@@ -381,7 +383,7 @@ impl EngineState
 
                 let camera = Camera::new();
 
-                let depth_texture = crate::texture::Texture::create_depth_texture(
+                let depth_texture = Texture::create_depth_texture(
                         &device,
                         &surface_manager.configuration,
                         "depth_texture",
@@ -953,12 +955,23 @@ impl EngineBuilder
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 last_render_time: Duration::from_secs_f32(0.0),
+                                tps: None,
                                 config,
                                 model_map,
                                 state: None,
                                 window: None,
                         },
                 }
+        }
+
+        /// Adds a Tick Per Second timing mechanism.
+        pub fn with_tps(
+                mut self,
+                tps: u16,
+        ) -> Self
+        {
+                self.engine.tps = Some(tps);
+                self
         }
 
         pub fn keybind<F>(
