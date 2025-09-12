@@ -40,6 +40,7 @@ use crate::resources::create_transform_bind_group_layout;
 use crate::texture::Texture;
 use crate::ui::UiSystem;
 use anyhow::{Context, Result};
+use derivative::Derivative;
 use instant::Instant;
 use serde::{Deserialize, Serialize};
 use winit::event::{DeviceEvent, DeviceId, ElementState};
@@ -126,6 +127,8 @@ pub enum FillMode
         Vertex = 2,
 }
 
+pub type Behavior = Box<dyn FnMut(&mut Engine)>;
+
 /// Main entrypoint of Oxide.
 ///
 /// To construct [`Engine`], use [`EngineBuilder`].
@@ -134,13 +137,17 @@ pub enum FillMode
 /// event handling, and destruction of itself.
 ///
 /// Every field is **Optional**.
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Engine
 {
         /// On browser environments, an [`EventLoopProxy`] is needed
         /// to send events back into the event loop asynchronously.
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
+
+        #[derivative(Debug = "ignore")]
+        pub behavior_list: Vec<Behavior>,
 
         pub tps: u16,
 
@@ -167,6 +174,15 @@ pub struct Engine
 
 impl Engine
 {
+        pub fn register_behavior<F>(
+                &mut self,
+                f: F,
+        ) where
+                F: 'static + FnMut(&mut Engine),
+        {
+                self.behavior_list.push(Box::new(f));
+        }
+
         pub fn render(
                 &mut self,
                 dt: &Duration,
@@ -765,6 +781,23 @@ impl ApplicationHandler<EngineState> for Engine
                 event: WindowEvent,
         )
         {
+                let elapsed = Instant::now() - self.start_time;
+
+                while elapsed - self.last_tick_time >= self.tps_interval
+                {
+                        self.current_tick += 1;
+                        self.last_tick_time += self.tps_interval;
+
+                        // take ownership of the vector temporarily
+                        let mut behaviors = std::mem::take(&mut self.behavior_list);
+                        for behaviour in &mut behaviors
+                        {
+                                behaviour(self); // now allowed, no borrow conflict
+                        }
+                        // put the vector back
+                        self.behavior_list = behaviors;
+                }
+
                 let state = match &mut self.state
                 {
                         Some(canvas) => canvas,
@@ -774,18 +807,6 @@ impl ApplicationHandler<EngineState> for Engine
                 state.gui
                         .renderer
                         .handle_input(&self.window.as_ref().unwrap(), &event);
-
-                let elapsed = Instant::now() - self.start_time;
-
-                while elapsed - self.last_tick_time >= self.tps_interval
-                {
-                        self.current_tick += 1;
-                        self.last_tick_time += self.tps_interval;
-
-                        log::info!("Tick: {}", self.current_tick);
-
-                        // Game loop dependant on tick system
-                }
 
                 match event
                 {
@@ -968,6 +989,7 @@ impl EngineBuilder
 
                 Self {
                         engine: Engine {
+                                behavior_list: vec![],
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 last_render_time: Duration::from_secs_f32(0.0),

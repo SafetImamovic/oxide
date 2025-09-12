@@ -6,11 +6,19 @@ pub fn run() -> anyhow::Result<()>
 {
         oxide::utils::bootstrap::show_start_message();
 
-        let engine = oxide::engine::EngineBuilder::new()
+        let mut engine = oxide::engine::EngineBuilder::new()
                 .with_debug_ui()
                 .with_tps(1u16)
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
+
+        engine.register_behavior(|eng| {
+                log::info!("{}", eng.current_tick);
+        });
+
+        engine.register_behavior(|eng| {
+                log::info!("{}", eng.current_tick);
+        });
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 
