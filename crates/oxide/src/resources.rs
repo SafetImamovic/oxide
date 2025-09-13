@@ -2,7 +2,10 @@ use crate::geometry::mesh::MeshData;
 use crate::material::MaterialData;
 use crate::model::{Model, ModelVertex};
 use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_resources() -> PathBuf
@@ -186,16 +189,15 @@ pub async fn load_gltf(
 
                 materials.push(MaterialData {
                         name: name.clone(),
-                        base_color_texture: None, // This can probably be removed
+                        base_color_texture: None,
                         base_color_factor: pbr.base_color_factor(),
                         metallic_factor: pbr.metallic_factor(),
                         roughness_factor: pbr.roughness_factor(),
-                        base_color_texture_index, // Now this will have the actual index!
-                        normal_texture_index,     // Now this will have the actual index!
-                        diffuse_texture: None,    // This can probably be removed
-                        normal_texture: None,     // This can probably be removed
-                        metallic_roughness_texture: None, // This can probably be removed
-                        metallic_roughness_texture_index, // Now this will have the actual index!
+                        base_color_texture_index,
+                        normal_texture_index,
+                        normal_texture: None,
+                        metallic_roughness_texture: None,
+                        metallic_roughness_texture_index,
                 });
         }
 
@@ -224,6 +226,7 @@ async fn load_glb(
                         web_sys::window().ok_or_else(|| anyhow::anyhow!("No window available"))?;
 
                 let full_path = resource_path(path, crate_name);
+
                 log::info!("Fetching GLB from: {}", full_path);
 
                 let resp_value =
@@ -249,14 +252,12 @@ async fn load_glb(
 
                 let bytes = js_sys::Uint8Array::new(&array_buffer).to_vec();
 
-                // Import GLB - this should work since everything is embedded
                 gltf::import_slice(&bytes)
                         .map_err(|e| anyhow::anyhow!("Failed to import GLB: {:?}", e))
         }
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-                // Native loading - simple file read
                 let bytes = std::fs::read(path)?;
                 gltf::import_slice(&bytes)
                         .map_err(|e| anyhow::anyhow!("Failed to import GLB: {:?}", e))

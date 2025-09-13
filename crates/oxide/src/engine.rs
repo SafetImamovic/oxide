@@ -18,7 +18,7 @@
 //! and providing a static `setup` function that returns an [`EngineRunner`].
 //! This setup function is registered internally and later executed by [`run`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 #[cfg(target_arch = "wasm32")]
@@ -37,8 +37,11 @@ use crate::renderer::graph::RenderGraph;
 use crate::renderer::pipeline::PipelineManager;
 use crate::renderer::surface::SurfaceManager;
 use crate::resources::create_transform_bind_group_layout;
+use crate::texture::Texture;
 use crate::ui::UiSystem;
 use anyhow::{Context, Result};
+use derivative::Derivative;
+use instant::Instant;
 use serde::{Deserialize, Serialize};
 use winit::event::{DeviceEvent, DeviceId, ElementState};
 use winit::event_loop::ControlFlow;
@@ -124,6 +127,8 @@ pub enum FillMode
         Vertex = 2,
 }
 
+pub type Behavior = Box<dyn FnMut(&mut Engine)>;
+
 /// Main entrypoint of Oxide.
 ///
 /// To construct [`Engine`], use [`EngineBuilder`].
@@ -132,7 +137,8 @@ pub enum FillMode
 /// event handling, and destruction of itself.
 ///
 /// Every field is **Optional**.
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Engine
 {
         /// On browser environments, an [`EventLoopProxy`] is needed
@@ -140,26 +146,47 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
+        pub pressed_keys: HashSet<KeyCode>,
+
+        #[derivative(Debug = "ignore")]
+        pub behavior_list: Vec<Behavior>,
+
+        pub lerp_alpha: f32,
+
+        pub tps: u16,
+
+        pub tps_interval: Duration,
+
+        pub current_tick: u8,
+
         pub last_render_time: Duration,
+
+        pub last_tick_time: Duration,
+
+        pub start_time: Instant,
 
         pub config: Config,
 
         pub model_map: HashMap<String, String>,
 
-        // --- Core Context ---
         /// The OS/Browser window for rendering and input handling.
         pub window: Option<Arc<Window>>,
 
         /// `wgpu` internals.
         pub state: Option<EngineState>,
-
-        // --- Timing ---
-        /// The timestamp of the last frame, used for delta time calculations.
-        pub time: Option<instant::Instant>,
 }
 
 impl Engine
 {
+        pub fn register_behavior<F>(
+                &mut self,
+                f: F,
+        ) where
+                F: 'static + FnMut(&mut Engine),
+        {
+                self.behavior_list.push(Box::new(f));
+        }
+
         pub fn render(
                 &mut self,
                 dt: &Duration,
@@ -202,7 +229,7 @@ impl Engine
                 Ok(())
         }
 
-        pub fn add_obj_model(
+        pub fn add_model(
                 &mut self,
                 handle: impl Into<String>,
                 file_name: impl Into<String>,
@@ -274,7 +301,7 @@ impl Engine
                         .surface
                         .configure(&state.device, &state.surface_manager.configuration);
 
-                state.depth_texture = crate::texture::Texture::create_depth_texture(
+                state.depth_texture = Texture::create_depth_texture(
                         &state.device,
                         &state.surface_manager.configuration,
                         "depth_texture",
@@ -330,11 +357,7 @@ pub struct EngineState
 
         pub camera: Camera,
 
-        pub depth_texture: crate::texture::Texture,
-
-        pub vertex_buffers: Vec<wgpu::Buffer>,
-
-        pub index_buffers: Vec<wgpu::Buffer>,
+        pub depth_texture: Texture,
 
         pub render_graph: RenderGraph,
 
@@ -389,7 +412,7 @@ impl EngineState
 
                 let camera = Camera::new();
 
-                let depth_texture = crate::texture::Texture::create_depth_texture(
+                let depth_texture = Texture::create_depth_texture(
                         &device,
                         &surface_manager.configuration,
                         "depth_texture",
@@ -424,8 +447,6 @@ impl EngineState
                         queue,
                         gui,
                         surface_manager,
-                        index_buffers: vec![],
-                        vertex_buffers: vec![],
                 })
         }
 
@@ -764,6 +785,23 @@ impl ApplicationHandler<EngineState> for Engine
                 event: WindowEvent,
         )
         {
+                let elapsed = Instant::now() - self.start_time;
+
+                while elapsed - self.last_tick_time >= self.tps_interval
+                {
+                        self.current_tick += 1;
+                        self.last_tick_time += self.tps_interval;
+                }
+
+                let mut behaviors = std::mem::take(&mut self.behavior_list);
+
+                for behaviour in &mut behaviors
+                {
+                        behaviour(self); // now allowed, no borrow conflict
+                }
+
+                self.behavior_list = behaviors;
+
                 let state = match &mut self.state
                 {
                         Some(canvas) => canvas,
@@ -773,8 +811,6 @@ impl ApplicationHandler<EngineState> for Engine
                 state.gui
                         .renderer
                         .handle_input(&self.window.as_ref().unwrap(), &event);
-
-                let last = self.last_render_time;
 
                 match event
                 {
@@ -788,9 +824,17 @@ impl ApplicationHandler<EngineState> for Engine
                         }
                         WindowEvent::RedrawRequested =>
                         {
-                                let last_render_time = instant::Instant::now();
+                                let last_render_time = self.last_render_time;
 
-                                match self.render(&last)
+                                let render_start = Instant::now();
+
+                                let elapsed = Instant::now() - self.start_time;
+                                let alpha = (elapsed - self.last_tick_time).as_secs_f32()
+                                        / self.tps_interval.as_secs_f32();
+
+                                self.lerp_alpha = alpha;
+
+                                match self.render(&last_render_time)
                                 {
                                         Ok(_) =>
                                         {
@@ -802,9 +846,9 @@ impl ApplicationHandler<EngineState> for Engine
 
                                                 window.request_redraw();
 
-                                                let now = instant::Instant::now();
+                                                let render_end = Instant::now();
 
-                                                self.last_render_time = now - last_render_time;
+                                                self.last_render_time = render_end - render_start;
                                         }
                                         Err(e) =>
                                         {
@@ -822,6 +866,18 @@ impl ApplicationHandler<EngineState> for Engine
                                 ..
                         } =>
                         {
+                                match key_state
+                                {
+                                        ElementState::Pressed =>
+                                        {
+                                                self.pressed_keys.insert(code);
+                                        }
+                                        ElementState::Released =>
+                                        {
+                                                self.pressed_keys.remove(&code);
+                                        }
+                                }
+
                                 state.camera
                                         .controller
                                         .handle_key(code, key_state.is_pressed());
@@ -955,16 +1011,35 @@ impl EngineBuilder
 
                 Self {
                         engine: Engine {
+                                behavior_list: vec![],
                                 #[cfg(target_arch = "wasm32")]
                                 proxy: None,
                                 last_render_time: Duration::from_secs_f32(0.0),
+                                last_tick_time: Duration::from_secs_f32(0.0),
+                                pressed_keys: HashSet::new(),
+                                lerp_alpha: 0.0,
+                                tps: 20,
+                                current_tick: 0,
+                                tps_interval: Duration::from_secs_f32(1.0 / 20.0),
+                                start_time: Instant::now(),
                                 config,
                                 model_map,
                                 state: None,
-                                time: None,
                                 window: None,
                         },
                 }
+        }
+
+        /// Specify the Ticks Per Second.
+        ///
+        /// Default is 20tps.
+        pub fn with_tps(
+                mut self,
+                tps: u16,
+        ) -> Self
+        {
+                self.engine.tps = tps;
+                self
         }
 
         pub fn keybind<F>(
@@ -1001,16 +1076,6 @@ impl EngineBuilder
                 Ok(self)
         }
 
-        /// Set the time (for delta timing)
-        pub fn with_time(
-                mut self,
-                time: instant::Instant,
-        ) -> Self
-        {
-                self.engine.time = Some(time);
-                self
-        }
-
         /// Finally builds the [`Engine`].
         ///
         /// Does some field validation.
@@ -1023,8 +1088,10 @@ impl EngineBuilder
         ///
         /// See [`EngineBuilder`] for important notes on deferred
         /// initialization.
-        pub fn build(self) -> Result<Engine>
+        pub fn build(mut self) -> Result<Engine>
         {
+                self.engine.tps_interval = Duration::from_secs_f32(1.0 / self.engine.tps as f32);
+
                 Ok(self.engine)
         }
 

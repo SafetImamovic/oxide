@@ -7,15 +7,12 @@ pub fn run() -> anyhow::Result<()>
 {
         oxide::utils::bootstrap::show_start_message();
 
-        let resources = oxide::resources::load_resources();
-        log::info!("Loading Resources from: {}", resources.display());
-
         let mut engine = oxide::engine::EngineBuilder::new()
                 .with_debug_ui()
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 
-        engine.add_obj_model("cube", "cube.obj");
+        engine.add_model("cube", "cube.obj");
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
 

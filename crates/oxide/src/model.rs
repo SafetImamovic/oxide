@@ -1,10 +1,7 @@
 use crate::geometry::mesh::{Mesh, MeshData};
 use crate::material::{MaterialData, MaterialProperties};
 use crate::resources::create_transform_bind_group_layout;
-use cgmath::num_traits::float::FloatCore;
-use cgmath::num_traits::real::Real;
 use cgmath::{Deg, EuclideanSpace, Euler, InnerSpace, Quaternion, Rad, Rotation3, Vector3};
-use egui::DragValue;
 use std::ops::Range;
 use std::time::Duration;
 use wgpu::util::DeviceExt;
@@ -61,11 +58,11 @@ pub trait Transform
 pub struct Model
 {
         pub position: cgmath::Point3<f32>,
-        pub rotation: cgmath::Quaternion<f32>,
+        pub rotation: Quaternion<f32>,
         pub euler_angles: [f32; 3],
         pub rotation_speeds: [f32; 3],
         pub is_spinning: bool,
-        pub scale: cgmath::Vector3<f32>,
+        pub scale: Vector3<f32>,
         pub meshes: Vec<Mesh>,
         pub materials: Vec<crate::material::Material>,
 }
@@ -127,12 +124,12 @@ impl Model
                             (rgba_data, 4, wgpu::TextureFormat::Rgba8UnormSrgb)
                         }
                         gltf::image::Format::R8G8 => {
-                            // R8G8 format (2 bytes per pixel) - use appropriate texture format
+                            // R8G8 format (2 bytes per pixel) - use the appropriate texture format
                             // Convert to RGBA if needed, or use a two-channel format
                             let mut rgba_data = Vec::with_capacity(image.pixels.len() * 2);
                             for chunk in image.pixels.chunks_exact(2) {
                                 rgba_data.extend_from_slice(chunk);
-                                rgba_data.push(0); // Add blue channel
+                                rgba_data.push(0); // Add the blue channel
                                 rgba_data.push(255); // Add alpha channel
                             }
                             (rgba_data, 4, wgpu::TextureFormat::Rgba8UnormSrgb)
@@ -252,18 +249,18 @@ impl Model
                 },
             );
 
-            let material_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            let material_bind_group = device.create_bind_group(&BindGroupDescriptor {
                 layout: material_bind_group_layout,
                 entries: &[
-                    wgpu::BindGroupEntry {
+                    BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::TextureView(&base_color_texture.view),
                     },
-                    wgpu::BindGroupEntry {
+                    BindGroupEntry {
                         binding: 1,
                         resource: wgpu::BindingResource::Sampler(&base_color_texture.sampler),
                     },
-                    wgpu::BindGroupEntry {
+                    BindGroupEntry {
                         binding: 2,
                         resource: material_properties_buffer.as_entire_binding(),
                     },
@@ -328,11 +325,11 @@ impl Model
 
                 Model {
                         position: cgmath::Point3::new(0.0, 0.0, 0.0),
-                        rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                        rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
                         euler_angles: [0.0, 0.0, 0.0],
                         rotation_speeds: [0.0, 0.0, 0.0],
                         is_spinning: false,
-                        scale: cgmath::Vector3::new(1.0, 1.0, 1.0),
+                        scale: Vector3::new(1.0, 1.0, 1.0),
                         meshes: gpu_meshes,
                         materials: gpu_materials,
                 }
@@ -392,9 +389,9 @@ impl Model
                 m: &MeshData,
         ) -> wgpu::BindGroup
         {
-                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                device.create_bind_group(&BindGroupDescriptor {
                         layout: transform_bind_group_layout,
-                        entries: &[wgpu::BindGroupEntry {
+                        entries: &[BindGroupEntry {
                                 binding: 0,
                                 resource: transform_buffer.as_entire_binding(),
                         }],
@@ -489,27 +486,6 @@ impl Model
                         });
         }
 
-        fn quat_to_axis_angle(quat: Quaternion<f32>) -> (Vector3<f32>, f32)
-        {
-                let angle = 2.0 * quat.s.acos();
-                let sin_half_angle = (1.0 - quat.s * quat.s).sqrt();
-
-                let axis = if sin_half_angle > 0.001
-                {
-                        Vector3::new(
-                                quat.v.x / sin_half_angle,
-                                quat.v.y / sin_half_angle,
-                                quat.v.z / sin_half_angle,
-                        )
-                }
-                else
-                {
-                        Vector3::unit_x()
-                };
-
-                (axis.normalize(), angle)
-        }
-
         pub fn update(
                 &mut self,
                 dt: &Duration,
@@ -560,7 +536,6 @@ impl Model
                         euler.z.0.to_degrees(),
                 ];
 
-                // Optional: Normalize angles to -180..180 range for cleaner UI
                 self.normalize_euler_angles();
         }
 
@@ -569,7 +544,7 @@ impl Model
                 for angle in &mut self.euler_angles
                 {
                         // Normalize to -180 to 180 range
-                        *angle = (*angle % 360.0);
+                        *angle = *angle % 360.0;
                         if *angle > 180.0
                         {
                                 *angle -= 360.0;
@@ -593,29 +568,7 @@ impl Model
                 }
         }
 
-        fn axis_angle_to_quat(
-                axis: Vector3<f32>,
-                angle: f32,
-        ) -> Quaternion<f32>
-        {
-                let half_angle = angle / 2.0;
-                let sin_half = half_angle.sin();
-                let cos_half = half_angle.cos();
-
-                Quaternion::new(cos_half, axis.x * sin_half, axis.y * sin_half, axis.z * sin_half)
-                        .normalize()
-        }
-
         // Get Euler angles from quaternion (for demonstration)
-        fn quat_to_euler(quat: Quaternion<f32>) -> [f32; 3]
-        {
-                let euler_rad: cgmath::Euler<Rad<f32>> = quat.into();
-                [
-                        euler_rad.x.0.to_degrees(),
-                        euler_rad.y.0.to_degrees(),
-                        euler_rad.z.0.to_degrees(),
-                ]
-        }
 }
 
 pub trait DrawModel<'a>

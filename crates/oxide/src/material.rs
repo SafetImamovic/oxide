@@ -2,7 +2,6 @@
 pub struct MaterialData
 {
         pub name: String,
-        pub diffuse_texture: Option<String>,
         pub base_color_texture: Option<String>,
         pub normal_texture: Option<String>,
         pub metallic_roughness_texture: Option<String>,
@@ -20,7 +19,6 @@ impl Default for MaterialData
         {
                 Self {
                         name: "default".to_string(),
-                        diffuse_texture: None,
                         base_color_texture: None,
                         normal_texture: None,
                         metallic_roughness_texture: None,
