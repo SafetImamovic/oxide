@@ -10,7 +10,7 @@ members = [
     "crates/examples/mc",
     "crates/examples/city",
     "crates/examples/maxwell",
-    "crates/examples/primjer",
+    "crates/examples/primjer", "crates/examples/pong",
 ]
 
 resolver = "3"

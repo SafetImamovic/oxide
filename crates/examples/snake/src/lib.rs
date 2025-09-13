@@ -28,6 +28,8 @@ pub struct SnakeGame
         pub grid: Grid,
         pub snake: Snake,
         pub last_tick: u8,
+        pub started: bool,
+        pub game_over: bool,
 }
 
 impl SnakeGame
@@ -40,22 +42,78 @@ impl SnakeGame
                 Self {
                         grid,
                         snake,
+                        started: false,
                         last_tick: 0,
+                        game_over: false,
                 }
+        }
+
+        pub fn start(
+                &mut self,
+                model: &mut oxide::model::Model,
+        )
+        {
+                log::info!("Starting");
+
+                let x = self.grid.width / 2;
+                let z = self.grid.height / 2;
+
+                self.snake.grid_pos = (x, z);
+
+                self.snake.update_segment_pos();
+                self.snake.segment.store_prev();
+
+                model.position = cgmath::Point3::new(x as f32, 0.0, z as f32);
         }
 
         pub fn is_colliding(&self) -> bool
         {
-                if self.snake.grid_pos.0 >= self.grid.width
+                if self.snake.grid_pos.0 > self.grid.width
                 {
                         return true;
                 }
-                if self.snake.grid_pos.1 >= self.grid.height
+                if self.snake.grid_pos.1 > self.grid.height
+                {
+                        return true;
+                }
+                if self.snake.grid_pos.0 <= 0
+                {
+                        return true;
+                }
+                if self.snake.grid_pos.1 <= 0
                 {
                         return true;
                 }
 
                 false
+        }
+
+        pub fn update_grid_pos(&mut self)
+        {
+                match self.snake.direction
+                {
+                        Direction::Up =>
+                        {
+                                self.snake.grid_pos.0 += 1;
+                        }
+                        Direction::Down =>
+                        {
+                                self.snake.grid_pos.0 -= 1;
+                        }
+                        Direction::Left =>
+                        {
+                                self.snake.grid_pos.1 -= 1;
+                        }
+                        Direction::Right =>
+                        {
+                                self.snake.grid_pos.1 += 1;
+                        }
+                        Direction::None =>
+                        {
+                                self.snake.grid_pos.0 = self.grid.width / 2;
+                                self.snake.grid_pos.1 = self.grid.height / 2;
+                        }
+                }
         }
 }
 
@@ -169,34 +227,6 @@ impl Snake
                 }
         }
 
-        pub fn update_grid_pos(&mut self)
-        {
-                match self.direction
-                {
-                        Direction::Up =>
-                        {
-                                self.grid_pos.0 += 1;
-                        }
-                        Direction::Down =>
-                        {
-                                self.grid_pos.0 -= 1;
-                        }
-                        Direction::Left =>
-                        {
-                                self.grid_pos.1 -= 1;
-                        }
-                        Direction::Right =>
-                        {
-                                self.grid_pos.1 += 1;
-                        }
-                        Direction::None =>
-                        {
-                                self.grid_pos.0 = 0;
-                                self.grid_pos.1 = 0;
-                        }
-                }
-        }
-
         pub fn update_segment_pos(&mut self)
         {
                 // log::info!("{:?}", self.grid_pos);
@@ -218,6 +248,10 @@ pub fn run() -> anyhow::Result<()>
                 .build()?;
 
         engine.add_model("snake_head", "dodecahedron.glb");
+        engine.add_model("log_1", "log_photogrammetrised.glb");
+        engine.add_model("log_2", "log_photogrammetrised.glb");
+        engine.add_model("log_3", "log_photogrammetrised.glb");
+        engine.add_model("log_4", "log_photogrammetrised.glb");
 
         let snake = Snake::new("snake_head", 4f32);
 
@@ -231,6 +265,12 @@ pub fn run() -> anyhow::Result<()>
                 };
 
                 let snake_head = state.models.get_mut("snake_head").unwrap();
+
+                if !game.started
+                {
+                        game.start(snake_head);
+                        game.started = true;
+                }
 
                 let v = game.snake.segment.interpolate(eng.lerp_alpha);
                 snake_head.position = cgmath::Point3::new(v.x, v.y, v.z);
@@ -250,7 +290,7 @@ pub fn run() -> anyhow::Result<()>
                         }
 
                         game.snake.segment.store_prev();
-                        game.snake.update_grid_pos();
+                        game.update_grid_pos();
                         game.snake.update_segment_pos();
 
                         game.last_tick = eng.current_tick;
@@ -267,6 +307,15 @@ pub fn run() -> anyhow::Result<()>
                                 log::info!("Game Over");
 
                                 snake_head.position = cgmath::Point3::new(0.0, 0.0, 0.0);
+
+                                game.game_over = true;
+
+                                game.snake
+                                        .change_direction(&(KeyCode::Enter, ElementState::Pressed));
+
+                                game.snake.segment.store_prev();
+                                game.update_grid_pos();
+                                game.snake.update_segment_pos();
 
                                 return;
                         }

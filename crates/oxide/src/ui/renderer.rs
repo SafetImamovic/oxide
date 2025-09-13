@@ -334,12 +334,22 @@ impl GuiRenderer
                                                     }
                                             });
 
-                                        for (key, value) in models.iter_mut() {
-                                                ui.label(format!("Model: {}", key));
-                                                value.ui(ui);
-                                        }
+
                                 });
 
+                        });
+
+                        egui::Window::new("Models").show(self.context(), |ui| {
+                                for (key, value) in models.iter_mut()
+                                {
+                                        ui.group(|ui| {
+                                                ui.label(format!("Model: {}", key));
+                                                ui.push_id(key, |ui| {
+                                                        value.ui(ui);
+                                                });
+                                        });
+                                        ui.separator();
+                                }
                         });
                 }
 
