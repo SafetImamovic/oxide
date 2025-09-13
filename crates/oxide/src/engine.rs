@@ -151,11 +151,13 @@ pub struct Engine
         #[derivative(Debug = "ignore")]
         pub behavior_list: Vec<Behavior>,
 
+        pub lerp_alpha: f32,
+
         pub tps: u16,
 
         pub tps_interval: Duration,
 
-        pub current_tick: u16,
+        pub current_tick: u8,
 
         pub last_render_time: Duration,
 
@@ -789,16 +791,16 @@ impl ApplicationHandler<EngineState> for Engine
                 {
                         self.current_tick += 1;
                         self.last_tick_time += self.tps_interval;
-
-                        // take ownership of the vector temporarily
-                        let mut behaviors = std::mem::take(&mut self.behavior_list);
-                        for behaviour in &mut behaviors
-                        {
-                                behaviour(self); // now allowed, no borrow conflict
-                        }
-                        // put the vector back
-                        self.behavior_list = behaviors;
                 }
+
+                let mut behaviors = std::mem::take(&mut self.behavior_list);
+
+                for behaviour in &mut behaviors
+                {
+                        behaviour(self); // now allowed, no borrow conflict
+                }
+
+                self.behavior_list = behaviors;
 
                 let state = match &mut self.state
                 {
@@ -825,6 +827,12 @@ impl ApplicationHandler<EngineState> for Engine
                                 let last_render_time = self.last_render_time;
 
                                 let render_start = Instant::now();
+
+                                let elapsed = Instant::now() - self.start_time;
+                                let alpha = (elapsed - self.last_tick_time).as_secs_f32()
+                                        / self.tps_interval.as_secs_f32();
+
+                                self.lerp_alpha = alpha;
 
                                 match self.render(&last_render_time)
                                 {
@@ -999,6 +1007,7 @@ impl EngineBuilder
                                 last_render_time: Duration::from_secs_f32(0.0),
                                 last_tick_time: Duration::from_secs_f32(0.0),
                                 current_key: None,
+                                lerp_alpha: 0.0,
                                 tps: 20,
                                 current_tick: 0,
                                 tps_interval: Duration::from_secs_f32(1.0 / 20.0),
