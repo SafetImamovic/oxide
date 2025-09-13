@@ -277,18 +277,6 @@ pub fn run() -> anyhow::Result<()>
 
                 if eng.current_tick != game.last_tick
                 {
-                        match &eng.current_key
-                        {
-                                None =>
-                                {
-                                        return;
-                                }
-                                Some(k) =>
-                                {
-                                        game.snake.change_direction(&k);
-                                }
-                        }
-
                         game.snake.segment.store_prev();
                         game.update_grid_pos();
                         game.snake.update_segment_pos();

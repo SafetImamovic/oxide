@@ -18,7 +18,7 @@
 //! and providing a static `setup` function that returns an [`EngineRunner`].
 //! This setup function is registered internally and later executed by [`run`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 #[cfg(target_arch = "wasm32")]
@@ -146,7 +146,7 @@ pub struct Engine
         #[cfg(target_arch = "wasm32")]
         pub proxy: Option<winit::event_loop::EventLoopProxy<EngineState>>,
 
-        pub current_key: Option<(KeyCode, ElementState)>,
+        pub pressed_keys: HashSet<KeyCode>,
 
         #[derivative(Debug = "ignore")]
         pub behavior_list: Vec<Behavior>,
@@ -866,7 +866,17 @@ impl ApplicationHandler<EngineState> for Engine
                                 ..
                         } =>
                         {
-                                self.current_key = Some((code, key_state));
+                                match key_state
+                                {
+                                        ElementState::Pressed =>
+                                        {
+                                                self.pressed_keys.insert(code);
+                                        }
+                                        ElementState::Released =>
+                                        {
+                                                self.pressed_keys.remove(&code);
+                                        }
+                                }
 
                                 state.camera
                                         .controller
@@ -1006,7 +1016,7 @@ impl EngineBuilder
                                 proxy: None,
                                 last_render_time: Duration::from_secs_f32(0.0),
                                 last_tick_time: Duration::from_secs_f32(0.0),
-                                current_key: None,
+                                pressed_keys: HashSet::new(),
                                 lerp_alpha: 0.0,
                                 tps: 20,
                                 current_tick: 0,

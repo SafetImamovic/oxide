@@ -1,5 +1,7 @@
-use cgmath::{Point3, Vector3};
+use cgmath::{Deg, Euler, Point3, Quaternion, Rad, Rotation3, Vector3};
+use oxide::camera::{Camera, Projection};
 use oxide_macro::oxide_main;
+use std::collections::HashMap;
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
 
@@ -23,6 +25,7 @@ pub struct PongGame
         pub width: f32,
         pub height: f32,
         pub last_tick: u8,
+        pub is_init: bool,
 }
 
 impl PongGame
@@ -42,10 +45,78 @@ impl PongGame
                                 position: Point3::new(0.0, 0.0, 0.0),
                                 velocity: Vector3::new(4.0, 0.0, 2.0),
                         },
-                        width: 10.0,
+                        width: 6.0,
                         height: 6.0,
                         last_tick: 0,
+                        is_init: false,
                 }
+        }
+
+        pub fn init(
+                &mut self,
+                camera: &mut Camera,
+                models: &mut HashMap<String, oxide::model::Model>,
+        )
+        {
+                log::info!("Initializing Pong");
+
+                camera.locked_in = false;
+
+                camera.core.position = Point3::new(0.0, 40.0, -0.6);
+                camera.core.pitch = Deg(-89.0).into();
+                camera.core.yaw = Deg(90.0).into();
+                camera.config.fovy = Deg(17.0);
+
+                let rot_x = Deg(90.0);
+                let rot_y_1 = Deg(80.0);
+                let rot_y_2 = Deg(100.0);
+                let rot_z = Deg(0.0);
+
+                let euler_1 = Euler {
+                        x: rot_x,
+                        y: rot_y_1,
+                        z: rot_z,
+                };
+
+                let euler_2 = Euler {
+                        x: rot_x,
+                        y: rot_y_2,
+                        z: rot_z,
+                };
+
+                let quat_1: Quaternion<f32> = Quaternion::from(euler_1);
+                let quat_2: Quaternion<f32> = Quaternion::from(euler_2);
+
+                models.get_mut("bg").unwrap().position.y = -90.0;
+
+                models.get_mut("bg").unwrap().set_rotation_speed(0, 2.0);
+                models.get_mut("bg").unwrap().set_rotation_speed(1, 2.0);
+                models.get_mut("bg").unwrap().set_rotation_speed(2, 2.0);
+                models.get_mut("bg").unwrap().is_spinning = true;
+
+                models.get_mut("paddle_1").unwrap().rotation = quat_2;
+
+                models.get_mut("paddle_1")
+                        .unwrap()
+                        .set_rotation_speed(2, 720.0);
+                models.get_mut("paddle_1").unwrap().is_spinning = true;
+
+                models.get_mut("paddle_2")
+                        .unwrap()
+                        .set_rotation_speed(2, 720.0);
+                models.get_mut("paddle_2").unwrap().is_spinning = true;
+
+                models.get_mut("ball").unwrap().set_rotation_speed(0, 170.0);
+                models.get_mut("ball").unwrap().set_rotation_speed(1, 320.0);
+                models.get_mut("ball").unwrap().set_rotation_speed(2, 720.0);
+
+                models.get_mut("ball").unwrap().is_spinning = true;
+
+                models.get_mut("paddle_2").unwrap().rotation = quat_1;
+
+                models.get_mut("ball").unwrap().scale = cgmath::Vector3::new(0.2, 0.2, 0.2);
+
+                self.is_init = true;
         }
 
         pub fn update(
@@ -53,28 +124,44 @@ impl PongGame
                 delta: f32,
         )
         {
-                // Move ball
                 self.ball.position += self.ball.velocity * delta;
 
-                // Bounce off top/bottom walls
                 if self.ball.position.z >= self.height || self.ball.position.z <= -self.height
                 {
                         self.ball.velocity.z = -self.ball.velocity.z;
                 }
 
-                // Bounce off paddles
+                // Bounce off paddle 1
                 if (self.ball.position.x <= self.paddle_1.position.x + 0.5
                         && (self.ball.position.z - self.paddle_1.position.z).abs() <= 1.0)
                 {
                         self.ball.velocity.x = self.ball.velocity.x.abs();
+
+                        // Calculate hit position relative to paddle center
+                        let offset = self.ball.position.z - self.paddle_1.position.z;
+                        let normalized_offset = offset / 1.0; // since paddle "half-height" ~ 1.0
+
+                        // Add angle effect (scale factor controls steepness)
+                        self.ball.velocity.z = normalized_offset * 5.0;
+
+                        // Speed up slightly
+                        self.ball.velocity *= 1.05;
                 }
+
+                // Bounce off paddle 2
                 if (self.ball.position.x >= self.paddle_2.position.x - 0.5
                         && (self.ball.position.z - self.paddle_2.position.z).abs() <= 1.0)
                 {
                         self.ball.velocity.x = -self.ball.velocity.x.abs();
+
+                        let offset = self.ball.position.z - self.paddle_2.position.z;
+                        let normalized_offset = offset / 1.0;
+
+                        self.ball.velocity.z = normalized_offset * 5.0;
+
+                        self.ball.velocity *= 1.05;
                 }
 
-                // Reset ball if out of bounds
                 if self.ball.position.x < -self.width || self.ball.position.x > self.width
                 {
                         self.ball.position = Point3::new(0.0, 0.0, 0.0);
@@ -97,7 +184,7 @@ impl PongGame
                         &mut self.paddle_2
                 };
 
-                let delta = if up { 0.1 } else { -0.1 };
+                let delta = if up { 0.05 } else { -0.05 };
                 paddle.position.z += delta;
                 // Clamp within bounds
                 if paddle.position.z > self.height
@@ -118,10 +205,11 @@ pub fn run() -> anyhow::Result<()>
 
         let mut engine = oxide::engine::EngineBuilder::new()
                 .with_debug_ui()
-                .with_tps(60u16)
+                .with_tps(144u16)
                 .with_toggle(KeyCode::Tab)?
                 .build()?;
 
+        engine.add_model("bg", "forest_2_by_creepercoastal.glb");
         engine.add_model("paddle_1", "blue_paddle.glb");
         engine.add_model("paddle_2", "blue_paddle.glb");
         engine.add_model("ball", "dodecahedron.glb");
@@ -135,6 +223,11 @@ pub fn run() -> anyhow::Result<()>
                         Some(s) => s,
                 };
 
+                if !game.is_init
+                {
+                        game.init(&mut state.camera, &mut state.models);
+                }
+
                 if eng.current_tick == game.last_tick
                 {
                         return;
@@ -146,47 +239,30 @@ pub fn run() -> anyhow::Result<()>
                 state.models.get_mut("paddle_2").unwrap().position = game.paddle_2.position;
                 state.models.get_mut("ball").unwrap().position = game.ball.position;
 
-                log::info!("last tick: {:?}, current_tick: {:?}", game.last_tick, eng.current_tick);
-
-                if let Some((code, key_state)) = eng.current_key
+                if eng.pressed_keys.contains(&KeyCode::KeyR)
                 {
-                        let is_pressed = key_state == ElementState::Pressed;
-                        match code
-                        {
-                                KeyCode::KeyR =>
-                                {
-                                        if is_pressed
-                                        {
-                                                game.move_paddle(0, true)
-                                        }
-                                }
-                                KeyCode::KeyF =>
-                                {
-                                        if is_pressed
-                                        {
-                                                game.move_paddle(0, false)
-                                        }
-                                }
-                                KeyCode::ArrowUp =>
-                                {
-                                        if is_pressed
-                                        {
-                                                game.move_paddle(1, true)
-                                        }
-                                }
-                                KeyCode::ArrowDown =>
-                                {
-                                        if is_pressed
-                                        {
-                                                game.move_paddle(1, false)
-                                        }
-                                }
-                                _ =>
-                                {}
-                        }
+                        game.move_paddle(1, true);
+                }
+                if eng.pressed_keys.contains(&KeyCode::KeyF)
+                {
+                        game.move_paddle(1, false);
+                }
+                if eng.pressed_keys.contains(&KeyCode::ArrowUp)
+                {
+                        game.move_paddle(0, true);
+                }
+                if eng.pressed_keys.contains(&KeyCode::ArrowDown)
+                {
+                        game.move_paddle(0, false);
+                }
+                if eng.pressed_keys.contains(&KeyCode::Enter)
+                {
+                        game.init(&mut state.camera, &mut state.models);
                 }
 
                 game.last_tick = eng.current_tick;
+
+                log::info!("Tick: {}", eng.current_tick);
         });
 
         let runner = oxide::engine::EngineRunner::new(engine)?;
