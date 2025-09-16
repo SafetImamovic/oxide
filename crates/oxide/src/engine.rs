@@ -217,14 +217,14 @@ impl Engine
                                 &mut self.config.fill_mode,
                                 &frame,
                                 &mut encoder,
-                                &dt,
+                                dt,
                         );
                 }
 
                 state.queue.submit(std::iter::once(encoder.finish()));
                 output.present();
 
-                state.update(&dt);
+                state.update(dt);
 
                 Ok(())
         }
@@ -455,11 +455,11 @@ impl EngineState
                 dt: &Duration,
         )
         {
-                self.camera.update(&dt);
+                self.camera.update(dt);
 
                 for model in self.models.values_mut()
                 {
-                        model.update(&dt);
+                        model.update(dt);
                 }
         }
 
@@ -563,6 +563,7 @@ impl EngineState
                         self.gui.renderer
                                 .begin_frame(window.clone().as_ref(), &mut self.gui.ui_scale);
 
+                        #[allow(clippy::clone_on_copy)]
                         let mut temp_fill_mode = fill_mode.clone();
 
                         self.gui.renderer.render(
@@ -571,7 +572,7 @@ impl EngineState
                                 &mut temp_fill_mode,
                                 enabled_features,
                                 &mut self.camera,
-                                &dt,
+                                dt,
                                 &mut self.models,
                         );
 
@@ -610,7 +611,7 @@ impl EngineState
                                 &self.queue,
                                 encoder,
                                 window.clone().as_ref(),
-                                &frame,
+                                frame,
                                 screen_descriptor,
                         );
                 }
@@ -810,7 +811,7 @@ impl ApplicationHandler<EngineState> for Engine
 
                 state.gui
                         .renderer
-                        .handle_input(&self.window.as_ref().unwrap(), &event);
+                        .handle_input(self.window.as_ref().unwrap(), &event);
 
                 match event
                 {
@@ -922,19 +923,16 @@ impl ApplicationHandler<EngineState> for Engine
                 {
                         return;
                 };
-                match event
+                let DeviceEvent::MouseMotion {
+                        delta: (dx, dy),
+                } = event
+                else
                 {
-                        DeviceEvent::MouseMotion {
-                                delta: (dx, dy),
-                        } =>
-                        {
-                                if state.camera.locked_in
-                                {
-                                        state.camera.controller.handle_mouse(dx, dy);
-                                }
-                        }
-                        _ =>
-                        {}
+                        return;
+                };
+                if state.camera.locked_in
+                {
+                        state.camera.controller.handle_mouse(dx, dy);
                 }
         }
 }

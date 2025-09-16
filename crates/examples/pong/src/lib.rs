@@ -1,8 +1,7 @@
-use cgmath::{Deg, Euler, Point3, Quaternion, Rad, Rotation3, Vector3};
-use oxide::camera::{Camera, Projection};
+use cgmath::{Deg, Euler, Point3, Quaternion, Vector3};
+use oxide::camera::Camera;
 use oxide_macro::oxide_main;
 use std::collections::HashMap;
-use winit::event::ElementState;
 use winit::keyboard::KeyCode;
 
 pub struct Player
@@ -132,8 +131,8 @@ impl PongGame
                 }
 
                 // Bounce off paddle 1
-                if (self.ball.position.x <= self.paddle_1.position.x + 0.5
-                        && (self.ball.position.z - self.paddle_1.position.z).abs() <= 1.0)
+                if self.ball.position.x <= self.paddle_1.position.x + 0.5
+                        && (self.ball.position.z - self.paddle_1.position.z).abs() <= 1.0
                 {
                         self.ball.velocity.x = self.ball.velocity.x.abs();
 
@@ -149,8 +148,8 @@ impl PongGame
                 }
 
                 // Bounce off paddle 2
-                if (self.ball.position.x >= self.paddle_2.position.x - 0.5
-                        && (self.ball.position.z - self.paddle_2.position.z).abs() <= 1.0)
+                if self.ball.position.x >= self.paddle_2.position.x - 0.5
+                        && (self.ball.position.z - self.paddle_2.position.z).abs() <= 1.0
                 {
                         self.ball.velocity.x = -self.ball.velocity.x.abs();
 
@@ -195,6 +194,14 @@ impl PongGame
                 {
                         paddle.position.z = -self.height;
                 }
+        }
+}
+
+impl Default for PongGame
+{
+        fn default() -> Self
+        {
+                Self::new()
         }
 }
 

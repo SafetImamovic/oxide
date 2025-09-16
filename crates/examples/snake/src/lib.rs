@@ -76,11 +76,11 @@ impl SnakeGame
                 {
                         return true;
                 }
-                if self.snake.grid_pos.0 <= 0
+                if self.snake.grid_pos.0 == 0
                 {
                         return true;
                 }
-                if self.snake.grid_pos.1 <= 0
+                if self.snake.grid_pos.1 == 0
                 {
                         return true;
                 }
@@ -304,8 +304,6 @@ pub fn run() -> anyhow::Result<()>
                                 game.snake.segment.store_prev();
                                 game.update_grid_pos();
                                 game.snake.update_segment_pos();
-
-                                return;
                         }
                 }
         });

@@ -154,7 +154,7 @@ impl Model
                     // Calculate bytes per row with proper alignment
                     let unpadded_bytes_per_row: usize = bytes_per_pixel as usize * image.width as usize;
                     let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
-                    let padded_bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
+                    let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
 
                     log::debug!("Texture {}: {}x{}, bpp: {}, unpadded: {}, padded: {}",
             index, image.width, image.height, bytes_per_pixel,
@@ -303,10 +303,10 @@ impl Model
                                         },
                                 );
 
-                                let transform_buffer = Self::create_transform_buffer(&device, &m);
+                                let transform_buffer = Self::create_transform_buffer(device, &m);
                                 let transform_bind_group = Self::create_transform_bind_group(
-                                        &device,
-                                        &transform_bind_group_layout,
+                                        device,
+                                        transform_bind_group_layout,
                                         &transform_buffer,
                                         &m,
                                 );
@@ -368,7 +368,7 @@ impl Model
                 device: &wgpu::Device,
         ) -> wgpu::BindGroup
         {
-                let layout = create_transform_bind_group_layout(&device);
+                let layout = create_transform_bind_group_layout(device);
 
                 device.create_bind_group(&BindGroupDescriptor {
                         label: Some("model_transform_bind_group"),
@@ -544,7 +544,7 @@ impl Model
                 for angle in &mut self.euler_angles
                 {
                         // Normalize to -180 to 180 range
-                        *angle = *angle % 360.0;
+                        *angle %= 360.0;
                         if *angle > 180.0
                         {
                                 *angle -= 360.0;

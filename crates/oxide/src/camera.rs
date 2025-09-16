@@ -277,7 +277,7 @@ impl Camera
         )
         {
                 self.controller
-                        .update_camera(&mut self.core, &dt, &self.config);
+                        .update_camera(&mut self.core, dt, &self.config);
                 self.uniform.update_view_proj(&self.core, &self.projection);
         }
 

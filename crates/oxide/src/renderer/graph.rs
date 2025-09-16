@@ -29,6 +29,7 @@ impl RenderGraph
                 self.passes.push(pass);
         }
 
+        #[allow(clippy::too_many_arguments)]
         pub fn execute(
                 &mut self,
                 view: &wgpu::TextureView,
@@ -45,10 +46,10 @@ impl RenderGraph
                         if pass.enabled()
                         {
                                 pass.record(
-                                        &view,
+                                        view,
                                         encoder,
-                                        &camera,
-                                        &pipeline_manager,
+                                        camera,
+                                        pipeline_manager,
                                         depth_texture,
                                         models,
                                         device,
@@ -60,6 +61,14 @@ impl RenderGraph
         pub fn passes_mut(&mut self) -> &mut Vec<Box<dyn RenderPass>>
         {
                 &mut self.passes
+        }
+}
+
+impl Default for RenderGraph
+{
+        fn default() -> Self
+        {
+                Self::new()
         }
 }
 
@@ -83,6 +92,7 @@ pub trait RenderPass
                 value: bool,
         );
 
+        #[allow(clippy::too_many_arguments)]
         fn record(
                 &mut self,
                 view: &wgpu::TextureView,
@@ -301,7 +311,7 @@ impl RenderPass for GeometryPass
                 {
                         render_pass.set_bind_group(
                                 3,
-                                &model.create_model_transform_bind_group(&device),
+                                &model.create_model_transform_bind_group(device),
                                 &[],
                         );
 

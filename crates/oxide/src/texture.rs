@@ -94,19 +94,13 @@ impl Texture
                         depth_or_array_layers: 1,
                 };
 
-                let texture = Self::create_texture(&device, label, size);
+                let texture = Self::create_texture(device, label, size);
 
-                Self::write_texture_to_queue(
-                        &queue,
-                        &texture,
-                        (img.width, img.height),
-                        &rgba,
-                        size,
-                );
+                Self::write_texture_to_queue(queue, &texture, (img.width, img.height), &rgba, size);
 
                 let view = Self::create_view(&texture);
 
-                let sampler = Self::create_sampler(&device);
+                let sampler = Self::create_sampler(device);
 
                 Ok(Self {
                         texture,
@@ -144,11 +138,11 @@ impl Texture
                 queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
                                 aspect: wgpu::TextureAspect::All,
-                                texture: &texture,
+                                texture,
                                 mip_level: 0,
                                 origin: wgpu::Origin3d::ZERO,
                         },
-                        &rgba,
+                        rgba,
                         wgpu::TexelCopyBufferLayout {
                                 offset: 0,
                                 bytes_per_row: Some(4 * dims.0),
@@ -212,7 +206,7 @@ impl Texture
         ) -> wgpu::BindGroup
         {
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
-                        layout: &texture_bind_group_layout,
+                        layout: texture_bind_group_layout,
                         entries: &[
                                 wgpu::BindGroupEntry {
                                         binding: 0,

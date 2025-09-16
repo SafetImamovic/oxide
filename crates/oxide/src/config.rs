@@ -10,6 +10,14 @@ pub struct Config
         pub debug_toggle_key: Option<u32>,
 }
 
+impl Default for Config
+{
+        fn default() -> Self
+        {
+                Self::new()
+        }
+}
+
 impl Config
 {
         pub fn new() -> Self

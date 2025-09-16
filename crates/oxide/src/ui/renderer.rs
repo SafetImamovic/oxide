@@ -151,7 +151,7 @@ impl GuiRenderer
                 let full_output = self.state.egui_ctx().end_pass();
 
                 self.state
-                        .handle_platform_output(&window, full_output.platform_output);
+                        .handle_platform_output(window, full_output.platform_output);
 
                 let tris = self
                         .state
@@ -200,6 +200,7 @@ impl GuiRenderer
                 // full_output.textures_delta.set.len());
         }
 
+        #[allow(clippy::too_many_arguments)]
         pub fn render(
                 &mut self,
                 graph: &mut RenderGraph,
@@ -211,9 +212,10 @@ impl GuiRenderer
                 models: &mut HashMap<String, Model>,
         )
         {
-                self.debug_window(graph, ui_scale, fill_mode, features, camera, &dt, models);
+                self.debug_window(graph, ui_scale, fill_mode, features, camera, dt, models);
         }
 
+        #[allow(clippy::too_many_arguments)]
         pub fn debug_window(
                 &mut self,
                 graph: &mut RenderGraph,
@@ -382,6 +384,6 @@ impl GuiRenderer
                 ui_scale: &mut f32,
         ) -> f32
         {
-                window.scale_factor() as f32 * ui_scale.clone()
+                window.scale_factor() as f32 * *ui_scale
         }
 }

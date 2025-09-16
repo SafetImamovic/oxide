@@ -25,7 +25,7 @@ impl SurfaceManager
 
                 let format = capabilities.formats[0];
 
-                let configuration = Self::get_config(&size, &capabilities, format);
+                let configuration = Self::get_config(size, &capabilities, format);
 
                 //let depth = Self::create_depth_texture(device, &configuration);
 

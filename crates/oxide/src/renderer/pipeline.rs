@@ -152,3 +152,11 @@ impl PipelineManager
                         .insert(PipelineKind::Geometry, pipeline);
         }
 }
+
+impl Default for PipelineManager
+{
+        fn default() -> Self
+        {
+                Self::new()
+        }
+}
