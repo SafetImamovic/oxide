@@ -58,8 +58,7 @@ use winit::{
 pub struct EngineRunner
 {
         pub engine: Option<Engine>,
-
-        pub event_loop: EventLoop<EngineState>,
+        pub event_loop: winit::event_loop::EventLoop<EngineState>,
 }
 
 impl EngineRunner
@@ -1121,20 +1120,8 @@ impl EngineBuilder
 
                 let adapter = instance
                         .request_adapter(&wgpu::RequestAdapterOptions {
-                                // Either `HighPerformance` or `LowPower`.
-                                //
-                                // 1. LowPower will pick an adapter that favors battery life.
-                                //
-                                // 2. HighPerformance will pick an adapter for more power-hungry yet
-                                //    more performant GPU's, such as a dedicated graphics card.
                                 power_preference: wgpu::PowerPreference::HighPerformance,
-
-                                // Tells wgpu to find an adapter that can present to the supplied
-                                // surface.
                                 compatible_surface: Some(&surface),
-
-                                // Forces wgpu to pick an adapter that will work on all hardware.
-                                // Generally a software implementation on most systems.
                                 force_fallback_adapter: false,
                         })
                         .await
@@ -1165,12 +1152,6 @@ impl EngineBuilder
                 adapter.request_device(&wgpu::DeviceDescriptor {
                         label: None,
                         required_features,
-                        // WebGL doesn't support all of wgpu's features, so if
-                        // we're building for the web we'll have to disable some.
-                        // Describes the limit of certain types of resources that we can
-                        // create.
-                        //
-                        // Reference <https://gpuweb.github.io/gpuweb/#gpusupportedlimits>
                         required_limits: if cfg!(target_arch = "wasm32")
                         {
                                 wgpu::Limits::downlevel_webgl2_defaults()
@@ -1179,11 +1160,7 @@ impl EngineBuilder
                         {
                                 wgpu::Limits::default()
                         },
-
-                        // Provides the adapter with a preferred memory allocation strategy.
                         memory_hints: Default::default(),
-
-                        // Debug tracing.
                         trace: wgpu::Trace::Off,
                 })
                 .await
